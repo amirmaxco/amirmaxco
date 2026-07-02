@@ -245,7 +245,8 @@ def monitor_market():
     symbols = [
         "ADA/USDT", "POL/USDT", "ALGO/USDT", "XLM/USDT", "S/USDT", "HBAR/USDT", "ONE/USDT", "ZIL/USDT",
         "VET/USDT", "GRT/USDT", "STX/USDT", "BICO/USDT", "RENDER/USDT", "ANKR/USDT", "IOTX/USDT", "JASMY/USDT",
-        "TRX/USDT", "XRP/USDT", "DOGE/USDT", "CRO/USDT", "TNSR/USDT", "DOGS/USDT", "HMSTR/USDT", "APE/USDT"
+        "TRX/USDT", "XRP/USDT", "DOGE/USDT", "CRO/USDT", "TNSR/USDT", "DOGS/USDT", "HMSTR/USDT", "APE/USDT", "FET/USDT",
+        "DOT/USDT", "SEI/USDT", "DYDX/USDT","SUI/USDT"
     ]
 
     last_signals = {symbol: "HOLD" for symbol in symbols}
