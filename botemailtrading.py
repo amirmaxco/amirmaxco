@@ -7,7 +7,7 @@ from email.mime.multipart import MIMEMultipart
 import requests
 import ta
 
-# --- تنظیمات صرافی (تایم‌فریم ۲ ساعته) ---
+# --- تنظیمات صرافی (تایم‌فریم ۲ ساعته - فرکانس بالا + ارزهای زیر 100 هزار تومان) ---
 exchange = ccxt.kucoin({'enableRateLimit': True})
 timeframe = '2h'
 
@@ -70,8 +70,7 @@ def get_kucoin_data(symbol, timeframe, limit=100):
     try:
         ohlcv = exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
         return pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-    except Exception as e:
-        print(f"❌ خطا در دریافت دیتای {symbol}: {e}")
+    except Exception:
         return None
 
 
@@ -118,8 +117,7 @@ def calculate_ut_bot_professional(df):
                   df['trailing_stop'].iloc[i - 1]
 
         if ut_buy:
-            # 🔥 بهینه‌سازی ۱: کاهش فیلتر ADX به 18 برای شکار سریع‌تر روندها
-            if df['close'].iloc[i] > df['EMA_200'].iloc[i] and df['ADX'].iloc[i] > 18 and df['RSI'].iloc[i] < 70:
+            if df['close'].iloc[i] > df['EMA_200'].iloc[i] and df['ADX'].iloc[i] > 16 and df['RSI'].iloc[i] < 72:
                 df.at[df.index[i], 'signal'] = 'BUY'
             else:
                 df.at[df.index[i], 'signal'] = 'HOLD'
@@ -127,15 +125,6 @@ def calculate_ut_bot_professional(df):
             df.at[df.index[i], 'signal'] = 'SELL'
 
     return df
-
-
-def is_near_resistance(df, current_price, threshold_percent=1.5):
-    recent_highs = df['high'].iloc[-20:-2]
-    resistance = recent_highs.max()
-    distance_percent = ((resistance - current_price) / current_price) * 100
-    if 0 < distance_percent < threshold_percent:
-        return True, resistance
-    return False, resistance
 
 
 def simulate_oco_trade(symbol, current_price, atr_value, rsi_value):
@@ -166,7 +155,7 @@ def simulate_oco_trade(symbol, current_price, atr_value, rsi_value):
     <html>
         <body style="font-family: Tahoma, Arial, sans-serif; line-height: 1.8; color: #333; direction: rtl; text-align: right;">
             <div style="max-width: 500px; margin: auto; padding: 25px; border: 1px solid #e0e0e0; border-radius: 12px; background-color: #ffffff; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-                <h2 style="color: #27ae60; text-align: center; margin-bottom: 20px;">🚀 سیگنال خرید جدید دوازده ساعته/روزانه</h2>
+                <h2 style="color: #27ae60; text-align: center; margin-bottom: 20px;">🚀 سیگنال خرید فعال (ارزهای زیر 100 هزار تومان)</h2>
                 <hr style="border: 0; border-top: 1px solid #eee; margin-bottom: 20px;">
                 <table style="width: 100%; border-collapse: collapse; direction: rtl; text-align: right;">
                     <tr style="border-bottom: 1px solid #f5f5f5;">
@@ -212,7 +201,7 @@ def simulate_sell_trade(symbol, current_price):
     <html>
         <body style="font-family: Tahoma, Arial, sans-serif; line-height: 1.8; color: #333; direction: rtl; text-align: right;">
             <div style="max-width: 500px; margin: auto; padding: 25px; border: 1px solid #fecdcd; border-radius: 12px; background-color: #fffbfb; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-                <h3 style="color: #c0392b; text-align: center; margin-bottom: 15px;">📉 سیگنال فروش</h3>
+                <h3 style="color: #c0392b; text-align: center; margin-bottom: 15px;">📉 خروج و فروش</h3>
                 <h2 style="color: #d35400; text-align: center; margin-bottom: 20px;">{coin_name}</h2>
                 <hr style="border: 0; border-top: 1px solid #fecdcd; margin-bottom: 20px;">
                 <p style="text-align: center; font-size: 15px;">قیمت پیشنهادی فروش: <b style="color: #c0392b; font-size: 18px;">{toman_price} تومان</b></p>
@@ -224,13 +213,15 @@ def simulate_sell_trade(symbol, current_price):
 
 
 def monitor_market():
-    print(f"🚀 ربات روان و بهینه‌سازی شده ۲ ساعته فعال شد...")
+    print(f"🚀 ربات ۲ ساعته پرسرعت (ویژه ارزهای زیر 100 هزار تومان) فعال شد...")
 
+    # 🛒 لیست اصلاح‌شده: ۴۳ آلت‌کوین محبوب بازار که قیمت همگی زیر ۱۰۰ هزار تومان است
     symbols = [
         "ADA/USDT", "POL/USDT", "ALGO/USDT", "XLM/USDT", "S/USDT", "HBAR/USDT", "ONE/USDT", "ZIL/USDT",
         "VET/USDT", "GRT/USDT", "STX/USDT", "BICO/USDT", "RENDER/USDT", "ANKR/USDT", "IOTX/USDT", "JASMY/USDT",
         "TRX/USDT", "XRP/USDT", "DOGE/USDT", "CRO/USDT", "TNSR/USDT", "DOGS/USDT", "HMSTR/USDT", "APE/USDT", "FET/USDT",
-        "DOT/USDT", "SEI/USDT", "DYDX/USDT", "SUI/USDT"
+        "DOT/USDT", "SEI/USDT", "DYDX/USDT", "SUI/USDT", "FTM/USDT", "OP/USDT", "ARB/USDT", "GALA/USDT",
+        "BASED/USDT", "BONK/USDT", "SAND/USDT", "MANA/USDT", "MASK/USDT", "LRC/USDT", "CHZ/USDT", "ENJ/USDT", "BAT/USDT"
     ]
 
     last_signals = {symbol: "HOLD" for symbol in symbols}
@@ -239,7 +230,6 @@ def monitor_market():
     while True:
         print(f"\n🔄 --- شروع چرخه جدید پایش: {pd.Timestamp.now()} ---")
 
-        # دریافت قیمت دلار ایران برای این چرخه
         dollar_price = get_iran_dollar_price()
         print(f"💵 نرخ تتر مبنا در این دوره: {dollar_price:,} تومان")
 
@@ -250,9 +240,9 @@ def monitor_market():
                 btc_ema_20 = btc_df['close'].ewm(span=20, adjust=False).mean().iloc[-1]
                 btc_current_price = btc_df['close'].iloc[-1]
 
-                if btc_current_price < (btc_ema_20 * 0.97):
+                if btc_current_price < (btc_ema_20 * 0.975):
                     btc_trend_ok = False
-                    print("⚠️ بازار بیت‌کوین ریزشی شدید است! پایش آلت‌کوین‌ها موقتاً متوقف شد.")
+                    print("⚠️ بازار بیت‌کوین در ریزش شدید است. پایش آلت‌کوین‌ها موقتاً متوقف شد.")
         except Exception as e:
             print(f"خطا در دریافت دیتای بیت‌کوین: {e}")
 
@@ -272,8 +262,12 @@ def monitor_market():
                 current_price = df.iloc[-1]['close']
                 current_signal = confirmed_row['signal']
 
-                # 🪙 محاسبه قیمت به تومان برای نمایش در ترمینال
                 price_in_toman = current_price * dollar_price
+
+                # 🛑 فیلتر نهایی و قطعی برای بررسی قیمت تومانی در لحظه (زیر 100 هزار تومان)
+                if price_in_toman > 100000:
+                    continue
+
                 if price_in_toman < 100:
                     toman_str = f"{price_in_toman:,.2f}"
                 else:
@@ -283,32 +277,26 @@ def monitor_market():
                 current_volume = confirmed_row['volume']
                 rsi_value = confirmed_row['RSI']
 
-                # 📌 خروجی ترمینال کاملاً تومانی و مرتب شد
                 print(
                     f"📊 {symbol:<10} | قیمت: {toman_str:<12} تومان | سیگنال: {current_signal:<5} | RSI: {rsi_value:.1f}")
 
                 if current_signal == 'BUY' and current_signal != last_signals[symbol]:
-                    if current_volume >= (avg_volume * 1.0):
-                        near_res, res_value = is_near_resistance(df, current_price, threshold_percent=1.5)
-
-                        if not near_res:
-                            atr_value = confirmed_row['ATR'] if 'ATR' in confirmed_row else (current_price * 0.02)
-                            simulate_oco_trade(symbol, current_price, atr_value, rsi_value)
-                            last_signals[symbol] = current_signal
-                        else:
-                            print(f"   ⏭️ سیگنال {symbol} لغو شد؛ بسیار نزدیک به مقاومت است.")
+                    if current_volume >= (avg_volume * 0.9):
+                        atr_value = confirmed_row['ATR'] if 'ATR' in confirmed_row else (current_price * 0.02)
+                        simulate_oco_trade(symbol, current_price, atr_value, rsi_value)
+                        last_signals[symbol] = current_signal
                     else:
-                        print(f"   ⏭️ سیگنال {symbol} به دلیل حجم بسیار پایین فیلتر شد.")
+                        print(f"   ⏭️ سیگنال {symbol} به دلیل حجم مرده فیلتر شد.")
 
                 elif current_signal == 'SELL' and current_signal != last_signals[symbol]:
                     simulate_sell_trade(symbol, current_price)
                     last_signals[symbol] = current_signal
 
-                time.sleep(1.2)
-            except Exception as e:
+                time.sleep(1.5)
+            except Exception:
                 continue
 
-        print("\n💤 پایان چرخه. استراحت ۱۰ دقیقه ای برای کندل بعدی...")
+        print("\n💤 پایان چرخه پایش. استراحت ۱۰ دقیقه ای...")
         time.sleep(600)
 
 
