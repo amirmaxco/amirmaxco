@@ -61,7 +61,7 @@ def send_email_notification(subject, body, cc_email=cc_email):
 
         server.sendmail(SENDER_EMAIL, recipients, msg.as_string())
         server.quit()
-        print(f"📧 ایمیل ارسال شد به {RECEIVER_EMAIL} و CC: {cc_email}")
+        print(f"📧 ایمیل ارسال شد به {RECEIVER_EMAIL}")
     except Exception as e:
         print(f"⚠️ خطا در ارسال ایمیل: {e}")
 
@@ -88,11 +88,8 @@ def calculate_ut_bot_professional(df):
 
     df['EMA_200'] = df['close'].ewm(span=200, adjust=False).mean()
 
-    # فیلتر قدرت روند ADX
     adx_indicator = ta.trend.ADXIndicator(high=df['high'], low=df['low'], close=df['close'], window=14)
     df['ADX'] = adx_indicator.adx()
-
-    # فیلتر جدید: اندیکاتور RSI برای تشخیص سقف‌های قیمتی و اشباع خرید
     df['RSI'] = ta.momentum.rsi(close=df['close'], window=14)
 
     df['nLoss'] = sensibility * df['ATR']
@@ -121,8 +118,8 @@ def calculate_ut_bot_professional(df):
                   df['trailing_stop'].iloc[i - 1]
 
         if ut_buy:
-            # خرید فقط در صورتی مجاز است که علاوه بر شروط قبل، RSI زیر 70 (عدم اشباع خرید شدید) باشد
-            if df['close'].iloc[i] > df['EMA_200'].iloc[i] and df['ADX'].iloc[i] > 22 and df['RSI'].iloc[i] < 70:
+            # 🔥 بهینه‌سازی ۱: کاهش فیلتر ADX به 18 برای شکار سریع‌تر روندها
+            if df['close'].iloc[i] > df['EMA_200'].iloc[i] and df['ADX'].iloc[i] > 18 and df['RSI'].iloc[i] < 70:
                 df.at[df.index[i], 'signal'] = 'BUY'
             else:
                 df.at[df.index[i], 'signal'] = 'HOLD'
@@ -151,10 +148,7 @@ def simulate_oco_trade(symbol, current_price, atr_value, rsi_value):
     if stop_raw <= 0:
         stop_raw = current_price * 0.96
 
-    # محاسبه مدیریت ریسک حرفه‌ای بر اساس فاصله حد ضرر
     risk_percentage = ((current_price - stop_raw) / current_price) * 100
-
-    # پیشنهاد حجم ورود بر اساس فرمول مدیریت سرمایه (ریسک حداکثر ۲٪ از کل سرمایه روی این پوزیشن)
     recommended_position_size = 200 / risk_percentage if risk_percentage > 0 else 10
     if recommended_position_size > 100: recommended_position_size = 100
 
@@ -166,13 +160,13 @@ def simulate_oco_trade(symbol, current_price, atr_value, rsi_value):
     toman_target = f"{target_in_toman:,.2f}" if target_in_toman < 100 else f"{int(target_in_toman):,}"
     toman_stop = f"{stop_in_toman:,.2f}" if stop_in_toman < 100 else f"{int(stop_in_toman):,}"
 
-    subject = f"🎯 [سیگنال خرید] موقعیت ورود تایید شده: {coin_name}"
+    subject = f"🎯 [سیگنال خرید] موقعیت ورود: {coin_name}"
 
     body = f"""
     <html>
         <body style="font-family: Tahoma, Arial, sans-serif; line-height: 1.8; color: #333; direction: rtl; text-align: right;">
             <div style="max-width: 500px; margin: auto; padding: 25px; border: 1px solid #e0e0e0; border-radius: 12px; background-color: #ffffff; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-                <h2 style="color: #27ae60; text-align: center; margin-bottom: 20px;">🚀 سیگنال خرید فیلتر شده (فوق امن)</h2>
+                <h2 style="color: #27ae60; text-align: center; margin-bottom: 20px;">🚀 سیگنال خرید جدید دوازده ساعته/روزانه</h2>
                 <hr style="border: 0; border-top: 1px solid #eee; margin-bottom: 20px;">
                 <table style="width: 100%; border-collapse: collapse; direction: rtl; text-align: right;">
                     <tr style="border-bottom: 1px solid #f5f5f5;">
@@ -199,14 +193,7 @@ def simulate_oco_trade(symbol, current_price, atr_value, rsi_value):
                         <td style="padding: 10px 0; font-weight: bold; color: #7f8c8d;">📊 شاخص قدرت (RSI):</td>
                         <td style="padding: 10px 0; font-weight: bold; color: #9b59b6; text-align: left;">{rsi_value:.1f}</td>
                     </tr>
-                    <tr>
-                        <td style="padding: 10px 0; font-weight: bold; color: #7f8c8d;">💰 پیشنهاد حجم پوزیشن:</td>
-                        <td style="padding: 10px 0; font-weight: bold; color: #d35400; text-align: left;">حدود {recommended_position_size:.1f}% از کل سرمایه</td>
-                    </tr>
                 </table>
-                <div style="margin-top: 25px; padding: 10px; background-color: #f9f9f9; border-left: 4px solid #27ae60; font-size: 12px; color: #7f8c8d;">
-                    💡 این سیگنال تمام فیلترهای پنج‌گانه صعودی (روند کل، قدرت بازار، حجم، مقاومت و اشباع خرید) را با موفقیت پاس کرده است.
-                </div>
             </div>
         </body>
     </html>
@@ -220,18 +207,15 @@ def simulate_sell_trade(symbol, current_price):
     price_in_toman = current_price * dollar_price
     toman_price = f"{price_in_toman:,.2f}" if price_in_toman < 100 else f"{int(price_in_toman):,}"
 
-    subject = f"🚨 [سیگنال خروج] خروج سریع و فروش: {coin_name}"
+    subject = f"🚨 [سیگنال خروج] فروش: {coin_name}"
     body = f"""
     <html>
         <body style="font-family: Tahoma, Arial, sans-serif; line-height: 1.8; color: #333; direction: rtl; text-align: right;">
             <div style="max-width: 500px; margin: auto; padding: 25px; border: 1px solid #fecdcd; border-radius: 12px; background-color: #fffbfb; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-                <h3 style="color: #c0392b; text-align: center; margin-bottom: 15px;">📉 تغییر روند و صدور سیگنال فروش</h3>
+                <h3 style="color: #c0392b; text-align: center; margin-bottom: 15px;">📉 سیگنال فروش</h3>
                 <h2 style="color: #d35400; text-align: center; margin-bottom: 20px;">{coin_name}</h2>
                 <hr style="border: 0; border-top: 1px solid #fecdcd; margin-bottom: 20px;">
                 <p style="text-align: center; font-size: 15px;">قیمت پیشنهادی فروش: <b style="color: #c0392b; font-size: 18px;">{toman_price} تومان</b></p>
-                <div style="margin-top: 20px; padding: 10px; background-color: #fff5f5; border-left: 4px solid #c0392b; font-size: 12px; color: #95a5a6;">
-                    ⚠️ اندیکاتور تغییر فاز داده و خروج سریع از موقعیت جهت حفظ سود/کاهش زیان توصیه می‌شود.
-                </div>
             </div>
         </body>
     </html>
@@ -240,32 +224,35 @@ def simulate_sell_trade(symbol, current_price):
 
 
 def monitor_market():
-    print(f"🚀 ربات سیگنال‌دهی فوق حرفه‌ای ۲ ساعته با سیستم فیلترینگ چندلایه فعال شد...")
+    print(f"🚀 ربات روان و بهینه‌سازی شده ۲ ساعته فعال شد...")
 
     symbols = [
         "ADA/USDT", "POL/USDT", "ALGO/USDT", "XLM/USDT", "S/USDT", "HBAR/USDT", "ONE/USDT", "ZIL/USDT",
         "VET/USDT", "GRT/USDT", "STX/USDT", "BICO/USDT", "RENDER/USDT", "ANKR/USDT", "IOTX/USDT", "JASMY/USDT",
         "TRX/USDT", "XRP/USDT", "DOGE/USDT", "CRO/USDT", "TNSR/USDT", "DOGS/USDT", "HMSTR/USDT", "APE/USDT", "FET/USDT",
-        "DOT/USDT", "SEI/USDT", "DYDX/USDT","SUI/USDT"
+        "DOT/USDT", "SEI/USDT", "DYDX/USDT", "SUI/USDT"
     ]
 
     last_signals = {symbol: "HOLD" for symbol in symbols}
-    send_email_notification("🔴 سیستم هوشمند سیگنال‌دهی فعال شد",
-                            "<p style='direction: rtl; text-align: right;'>پایش بازار با فیلترهای همبستگی بیت‌کوین، حجم، قدرت روند ADX، اشباع RSI و خطوط مقاومت استاتیک آغاز شد.</p>")
+    send_email_notification("🔴 سیستم هوشمند سیگنال‌دهی فعال شد", "<p>پایش بازار آغاز شد.</p>")
 
     while True:
-        print(f"🔄 شروع پایش بازار: {pd.Timestamp.now()}")
+        print(f"\n🔄 --- شروع چرخه جدید پایش: {pd.Timestamp.now()} ---")
+
+        # دریافت قیمت دلار ایران برای این چرخه
+        dollar_price = get_iran_dollar_price()
+        print(f"💵 نرخ تتر مبنا در این دوره: {dollar_price:,} تومان")
 
         btc_trend_ok = True
         try:
-            btc_df = get_kucoin_data("BTC/USDT", timeframe='2h', limit=50)
+            btc_df = get_kucoin_data("BTC/USDT", timeframe='2h', limit=30)
             if btc_df is not None and not btc_df.empty:
-                btc_btc_ema = btc_df['close'].ewm(span=20, adjust=False).mean().iloc[-1]
+                btc_ema_20 = btc_df['close'].ewm(span=20, adjust=False).mean().iloc[-1]
                 btc_current_price = btc_df['close'].iloc[-1]
 
-                if btc_current_price < btc_btc_ema:
+                if btc_current_price < (btc_ema_20 * 0.97):
                     btc_trend_ok = False
-                    print("⚠️ بازار بیت‌کوین ضعیف یا ریزشی است. پایش آلت‌کوین‌ها موقتاً متوقف شد.")
+                    print("⚠️ بازار بیت‌کوین ریزشی شدید است! پایش آلت‌کوین‌ها موقتاً متوقف شد.")
         except Exception as e:
             print(f"خطا در دریافت دیتای بیت‌کوین: {e}")
 
@@ -285,12 +272,23 @@ def monitor_market():
                 current_price = df.iloc[-1]['close']
                 current_signal = confirmed_row['signal']
 
+                # 🪙 محاسبه قیمت به تومان برای نمایش در ترمینال
+                price_in_toman = current_price * dollar_price
+                if price_in_toman < 100:
+                    toman_str = f"{price_in_toman:,.2f}"
+                else:
+                    toman_str = f"{int(price_in_toman):,}"
+
                 avg_volume = df['volume'].rolling(window=20).mean().iloc[-2]
                 current_volume = confirmed_row['volume']
                 rsi_value = confirmed_row['RSI']
 
+                # 📌 خروجی ترمینال کاملاً تومانی و مرتب شد
+                print(
+                    f"📊 {symbol:<10} | قیمت: {toman_str:<12} تومان | سیگنال: {current_signal:<5} | RSI: {rsi_value:.1f}")
+
                 if current_signal == 'BUY' and current_signal != last_signals[symbol]:
-                    if current_volume > (avg_volume * 1.2):
+                    if current_volume >= (avg_volume * 1.0):
                         near_res, res_value = is_near_resistance(df, current_price, threshold_percent=1.5)
 
                         if not near_res:
@@ -298,20 +296,19 @@ def monitor_market():
                             simulate_oco_trade(symbol, current_price, atr_value, rsi_value)
                             last_signals[symbol] = current_signal
                         else:
-                            print(
-                                f"⏭️ سیگنال خرید {symbol} لغو شد؛ قیمت بسیار نزدیک به مقاومت استاتیک قبلی ({res_value}) است.")
+                            print(f"   ⏭️ سیگنال {symbol} لغو شد؛ بسیار نزدیک به مقاومت است.")
                     else:
-                        print(f"⏭️ سیگنال خرید {symbol} به دلیل حجم ناامیدکننده و کم معاملات فیلتر شد.")
+                        print(f"   ⏭️ سیگنال {symbol} به دلیل حجم بسیار پایین فیلتر شد.")
 
                 elif current_signal == 'SELL' and current_signal != last_signals[symbol]:
                     simulate_sell_trade(symbol, current_price)
                     last_signals[symbol] = current_signal
 
-                time.sleep(1.5)
+                time.sleep(1.2)
             except Exception as e:
                 continue
 
-        print("💤 پایان چرخه پایش این دوره. استراحت ۱۰ دقیقه‌ای...")
+        print("\n💤 پایان چرخه. استراحت ۱۰ دقیقه ای برای کندل بعدی...")
         time.sleep(600)
 
 
