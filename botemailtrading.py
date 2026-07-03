@@ -278,7 +278,7 @@ def monitor_market():
                 rsi_value = confirmed_row['RSI']
 
                 print(
-                    f"📊 {symbol:<10} | قیمت: {toman_str:<12} تومان | سیگنال: {current_signal:<5} | RSI: {rsi_value:.1f}")
+                    f"📊 {symbol:<10} | قیمت: {toman_str:<6} تومان |  {current_signal:<5} | RSI: {rsi_value:.1f}")
 
                 if current_signal == 'BUY' and current_signal != last_signals[symbol]:
                     if current_volume >= (avg_volume * 0.9):
