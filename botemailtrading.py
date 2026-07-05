@@ -11,20 +11,39 @@ from datetime import datetime
 # --- 🎯 تنظیمات صرافی: تایم‌فریم ۲ ساعته زنده ---
 exchange = ccxt.kucoin({'enableRateLimit': True})
 timeframe = '2h'
+budget_toman=50000
 
 SENDER_EMAIL = "amirghoorbaninia3002@gmail.com"
 SENDER_PASSWORD = "qcmg jxrc vxic mucu"
 RECEIVER_EMAIL = "amirghoorbaninia3002@gmail.com"
-cc_email = "www.rasul.mahmoudimajd1038@gmail.com"
+cc_email = "amirghoorbaninia3002@gmail.com"#www.rasul.mahmoudimajd1038@gmail.com"
+
+NOBITEX_TOKEN = "af580cc838c22460b3d35078a52f14ed2e1d2237"
+
 
 # --- 🎨 کدهای رنگی پیشرفته کنسول (ANSI) ---
 GREEN = "\033[92m"  # سبز برای BUY
 RED = "\033[91m"  # قرمز برای SELL
-BLUE = "\033[94m"  # آبی برای HOLD
+BLUE = "\033[00m"  # آبی برای HOLD
 RESET = "\033[0m"  # ریست کردن رنگ خط بعدی
 
 
 def get_iran_dollar_price():
+    # اولویت اول: نوبیتکس V3
+    try:
+        url = "apiv2.nobitex.ir/v3/orderbook/USDTIRT"
+        response = requests.get(url, timeout=5)
+        data = response.json()
+        if data and 'status' in data and data['status'] == 'ok':
+            # پیدا کردن بازار تتر به ریال (USDTIRT)
+            if 'USDTIRT' in data:
+                # قیمت در نوبیتکس به ریال است، تقسیم بر 10 می‌شود تومان
+                tether_rial = data['USDTIRT']['lastTradePrice']
+                return int(float(tether_rial) / 10)
+    except Exception:
+        pass
+
+    # اولویت دوم: والکس (تتر به تومان)
     try:
         url = "https://api.wallex.ir/v1/markets"
         response = requests.get(url, timeout=5)
@@ -34,16 +53,9 @@ def get_iran_dollar_price():
             return int(float(tether_toman))
     except Exception:
         pass
-    try:
-        url = "https://api.ramzinex.com/v1/exchange/pairs/1"
-        response = requests.get(url, timeout=5)
-        data = response.json()
-        if data and 'data' in data and 'sell' in data['data']:
-            return int(data['data']['sell'] / 10)
-    except Exception:
-        pass
-    return 65000
 
+    # قیمت زاپاس در صورت خطای شبکه
+    return 65000
 
 def send_beautiful_email(subject, title, type_color, rows_data):
     current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -64,7 +76,7 @@ def send_beautiful_email(subject, title, type_color, rows_data):
             .footer {{ background-color: #f8fafc; padding: 15px; text-align: center; font-size: 11px; color: #718096; border-top: 1px solid #e2e8f0; }}
         </style>
     </head>
-    <body>
+    <body dir="rtl">
         <div class="container">
             <div class="header">
                 <h2>{title}</h2>
@@ -200,10 +212,10 @@ def simulate_oco_trade(symbol, current_price, atr_value):
 
     rows_data = [
         ("نام ارز دیجیتال", coin_name),
-        ("قیمت خرید (تومان)", f"{toman_entry} Toman"),
+        ("قیمت خرید (تومان)", f"{toman_entry} تومان"),
         ("قیمت خرید (دلار)", f"${current_price:.5f}"),
-        ("حد سود / تارگت (تومان)", f"{toman_target} Toman"),
-        ("حد ضرر / استاپ (تومان)", f"{toman_stop} Toman")
+        ("حد سود / تارگت (تومان)", f"{toman_target} تومان"),
+        ("حد ضرر / استاپ (تومان)", f"{toman_stop} تومان")
     ]
 
     send_beautiful_email(subject, title, "#10b981", rows_data)
@@ -220,8 +232,9 @@ def simulate_sell_trade(symbol, current_price):
 
     rows_data = [
         ("نام ارز دیجیتال", coin_name),
-        ("قیمت فروش (تومان)", f"{toman_price} Toman"),
-        ("قیمت فروش (دلار)", f"${current_price:.5f}")
+        ("قیمت فروش (دلار)", f"${current_price:.5f}"),
+        ("قیمت فروش (تومان)", f"{toman_price} تومان")
+
     ]
 
     send_beautiful_email(subject, title, "#ef4444", rows_data)
@@ -272,11 +285,12 @@ def monitor_market():
                     color_code = BLUE  # تمام سطرهای HOLD یکپارچه آبی جذاب می‌شوند
 
                 print(
-                    f"{color_code}📊 {symbol:<10} | قیمت: {toman_str:<10} Toman | وضعیت: {current_signal:<5} | زمان: {current_time_str}{RESET}")
+                    f"{color_code}📊 {symbol:<10} | قیمت: {toman_str:<10} تومان | وضعیت: {current_signal:<5} | زمان: {current_time_str}{RESET}")
 
                 if current_signal == 'BUY' and current_signal != last_signals[symbol]:
                     atr_value = live_row['ATR']
                     simulate_oco_trade(symbol, current_price, atr_value)
+                    #place_nobitex_buy_order(symbol, price_in_toman, budget_toman=budget_toman)
                     last_signals[symbol] = current_signal
 
                 elif current_signal == 'SELL' and current_signal != last_signals[symbol]:
@@ -289,6 +303,51 @@ def monitor_market():
 
         print("💤 استراحت ۱۰ دقیقه‌ای تا چرخه بعدی...")
         time.sleep(600)
+
+
+def place_nobitex_buy_order(symbol, toman_price, budget_toman=budget_toman):
+    """
+    ثبت سفارش خرید در نوبیتکس بر اساس تومان
+    budget_toman: مقداری که می‌خواهید به تومان خرید کنید (مثلاً ۵۰۰ هزار تومان)
+    """
+    # تبدیل نام ارز صرافی کوکوین به فرمت نوبیتکس (مثلاً ADA/USDT به ada)
+    coin_name = symbol.split('/')[0].lower()
+
+    url = "https://api.nobitex.ir/market/orders/add"
+
+    headers = {
+        "Authorization": f"Token {NOBITEX_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    # محاسبه مقدار (Quantity) ارز بر اساس بودجه شما و قیمت فعلی
+    # نوبیتکس مقدار ارز را می‌خواهد
+    quantity = budget_toman / toman_price
+
+    # ساختار ارسالی برای سفارش خرید (نوع: buy، مدل: limit یا market)
+    # در اینجا از نوع خرید با قیمت مشخص (limit) استفاده شده که امن‌تر است
+    payload = {
+        "type": "buy",
+        "execution": "limit",  # یا market برای خرید آنی با قیمت بازار
+        "srcCurrency": coin_name,
+        "dstCurrency": "rls",  # نوبیتکس بر پایه ریال کار می‌کند
+        "amount": f"{quantity:.4f}",
+        "price": f"{int(toman_price * 10)}"  # تبدیل قیمت تومان به ریال برای نوبیتکس
+    }
+
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
+        result = response.json()
+
+        if result.get("status") == "ok":
+            print(f"🟢 [خرید موفق] سفارش خرید {coin_name.upper()} در نوبیتکس با موفقیت ثبت شد.")
+            return True
+        else:
+            print(f"❌ [خطا در نوبیتکس] {result.get('message', 'خطای ناشناخته')}")
+            return False
+    except Exception as e:
+        print(f"⚠️ خطای شبکه در ثبت سفارش نوبیتکس: {e}")
+        return False
 
 
 if __name__ == "__main__":
