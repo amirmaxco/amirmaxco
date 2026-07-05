@@ -18,7 +18,7 @@ SENDER_PASSWORD = "qcmg jxrc vxic mucu"
 RECEIVER_EMAIL = "amirghoorbaninia3002@gmail.com"
 cc_email = "amirghoorbaninia3002@gmail.com"#www.rasul.mahmoudimajd1038@gmail.com"
 
-NOBITEX_TOKEN = "af580cc838c22460b3d35078a52f14ed2e1d2237"
+NOBITEX_TOKEN = "62Dbym1J1IA1kPuHDKLXcF9RCpPU2cLLzFbEhAk48qE="
 
 
 # --- 🎨 کدهای رنگی پیشرفته کنسول (ANSI) ---
@@ -290,7 +290,7 @@ def monitor_market():
                 if current_signal == 'BUY' and current_signal != last_signals[symbol]:
                     atr_value = live_row['ATR']
                     simulate_oco_trade(symbol, current_price, atr_value)
-                    #place_nobitex_buy_order(symbol, price_in_toman, budget_toman=budget_toman)
+                    place_nobitex_buy_order(symbol, price_in_toman, budget_toman=budget_toman)
                     last_signals[symbol] = current_signal
 
                 elif current_signal == 'SELL' and current_signal != last_signals[symbol]:
@@ -307,10 +307,10 @@ def monitor_market():
 
 def place_nobitex_buy_order(symbol, toman_price, budget_toman=budget_toman):
     """
-    ثبت سفارش خرید در نوبیتکس بر اساس تومان
-    budget_toman: مقداری که می‌خواهید به تومان خرید کنید (مثلاً ۵۰۰ هزار تومان)
+    ثبت سفارش خرید لیمیت در نوبیتکس
+    سفارش دقیقاً با قیمت سیگنال در صف خرید قرار می‌گیرد.
     """
-    # تبدیل نام ارز صرافی کوکوین به فرمت نوبیتکس (مثلاً ADA/USDT به ada)
+    # تبدیل نام ارز صرافی کوکوین به فرمت نوبیتکس (مثلاً MASK/USDT به mask)
     coin_name = symbol.split('/')[0].lower()
 
     url = "https://api.nobitex.ir/market/orders/add"
@@ -320,19 +320,16 @@ def place_nobitex_buy_order(symbol, toman_price, budget_toman=budget_toman):
         "Content-Type": "application/json"
     }
 
-    # محاسبه مقدار (Quantity) ارز بر اساس بودجه شما و قیمت فعلی
-    # نوبیتکس مقدار ارز را می‌خواهد
+    # محاسبه تعداد دقیق ارز بر اساس بودجه و قیمت سیگنال
     quantity = budget_toman / toman_price
 
-    # ساختار ارسالی برای سفارش خرید (نوع: buy، مدل: limit یا market)
-    # در اینجا از نوع خرید با قیمت مشخص (limit) استفاده شده که امن‌تر است
     payload = {
         "type": "buy",
-        "execution": "limit",  # یا market برای خرید آنی با قیمت بازار
+        "execution": "limit",  # 📌 حالت لیمیت: قیمت ثابت و مشخص
         "srcCurrency": coin_name,
         "dstCurrency": "rls",  # نوبیتکس بر پایه ریال کار می‌کند
         "amount": f"{quantity:.4f}",
-        "price": f"{int(toman_price * 10)}"  # تبدیل قیمت تومان به ریال برای نوبیتکس
+        "price": f"{int(toman_price * 10)}"  # تبدیل قیمت تومان ربات به ریال برای نوبیتکس
     }
 
     try:
@@ -340,15 +337,55 @@ def place_nobitex_buy_order(symbol, toman_price, budget_toman=budget_toman):
         result = response.json()
 
         if result.get("status") == "ok":
-            print(f"🟢 [خرید موفق] سفارش خرید {coin_name.upper()} در نوبیتکس با موفقیت ثبت شد.")
+            print(f"📌 [سفارش ثبت شد] ارز {coin_name.upper()} با قیمت دقیق {int(toman_price):,} تومان در صف خرید نوبیتکس قرار گرفت.")
+            send_nobitex_order_email(coin_name, toman_price, budget_toman, quantity)
             return True
         else:
-            print(f"❌ [خطا در نوبیتکس] {result.get('message', 'خطای ناشناخته')}")
+            error_msg = result.get('message', 'خطای ناشناخته نوبیتکس')
+            print(f"❌ [خطای نوبیتکس] پاسخ صرافی: {error_msg}")
+            send_nobitex_error_email(coin_name, f"پاسخ صرافی: {error_msg}")
             return False
     except Exception as e:
         print(f"⚠️ خطای شبکه در ثبت سفارش نوبیتکس: {e}")
         return False
 
+
+
+# ارسال ایمیل خرید
+def send_nobitex_order_email(coin_name, toman_price, budget_toman, quantity):
+    """ارسال ایمیل تاییدیه پس از ثبت موفق سفارش در نوبیتکس"""
+    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    subject = f"🛒 [سفارش نوبیتکس] خرید {coin_name.upper()}"
+    title = f"🔵 سفارش خرید در نوبیتکس ثبت شد"
+
+    toman_price_str = f"{int(toman_price):,}"
+    budget_str = f"{int(budget_toman):,}"
+
+    rows_data = [
+        ("نام ارز دیجیتال", coin_name.upper()),
+        ("قیمت ثبت سفارش (تومان)", f"{toman_price_str} Toman"),
+        ("تعداد خریداری شده", f"{quantity:.4f} {coin_name.upper()}"),
+        ("کل بودجه مصرفی (تومان)", f"{budget_str} Toman")
+    ]
+
+    # استفاده از تابع قالب‌ساز ایمیلی که خودتان در کد داشتید (رنگ آبی برای نوبیتکس)
+    send_beautiful_email(subject, title, "#1e40af", rows_data)
+
+
+def send_nobitex_error_email(coin_name, error_message):
+    """ارسال ایمیل در صورت بروز خطا در ثبت سفارش نوبیتکس"""
+    subject = f"⚠️ [خطای نوبیتکس] عدم ثبت سفارش {coin_name.upper()}"
+    title = f"🔴 خطا در خرید صرافی نوبیتکس"
+
+    rows_data = [
+        ("نام ارز دیجیتال", coin_name.upper()),
+        ("وضعیت سیستم", "عملیات خرید با شکست مواجه شد ❌"),
+        ("علت/متن خطا", f"<span style='color: #ef4444; font-weight: bold;'>{error_message}</span>")
+    ]
+
+    # ارسال ایمیل با قالب قرمز رنگ برای هشدار خطا
+    send_beautiful_email(subject, title, "#ef4444", rows_data)
 
 if __name__ == "__main__":
     monitor_market()
