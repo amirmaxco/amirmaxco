@@ -11,7 +11,9 @@ import os
 import logging
 from logging.handlers import TimedRotatingFileHandler
 from datetime import datetime
+import jdatetime
 
+now_shamsi=jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 # ==========================================
 # 🛑 تنظیمات کلیدی و لایه‌های جدید ربات 🛑
 # ==========================================
@@ -65,7 +67,7 @@ max_peak_balance = 0.0
 
 GREEN = "\033[92m"
 RED = "\033[91m"
-BLUE = "\033[34m"
+BLUE = "\033[0m"
 RESET = "\033[0m"
 
 
@@ -80,7 +82,7 @@ def load_last_signals(symbols):
                 "target_price": 0.0,
                 "stop_price": 0.0,
                 "oco_order_id": None,
-                "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "updated_at": now_shamsi,
                 "trade_history": []
             } for sym in symbols
         }
@@ -191,7 +193,7 @@ def check_daily_limits():
 
 
 def send_beautiful_email(subject, title, type_color, rows_data):
-    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    current_time = now_shamsi
     html_body = f"""
     <html>
     <head>
@@ -238,8 +240,8 @@ def send_beautiful_email(subject, title, type_color, rows_data):
     msg.attach(MIMEText(html_body, 'html', 'utf-8'))
 
     try:
-        server = smtplib.SMTP('smtp.gmail.com', 587, timeout=10)
-        server.starttls()
+        # ✅ استفاده از پورت 465 و SMTP_SSL برای پایداری ۱۰۰٪ در جیمیل
+        server = smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=15)
         server.login(SENDER_EMAIL, SENDER_PASSWORD)
         server.sendmail(SENDER_EMAIL, recipients, msg.as_string())
         server.quit()
@@ -573,14 +575,16 @@ def monitor_market():
 
     while True:
         current_now = datetime.now()
-        current_time_str = current_now.strftime('%Y-%m-%d %H:%M:%S')
+        current_time_str = now_shamsi
 
         # زمان کلی چرخه فقط یک‌بار در ابتدای لوپ چاپ می‌شود
         print(f"\n🔄 --- چرخه پایش آنی بازار (تایم‌فریم 1h): {current_time_str} ---")
 
-        if current_now.hour == 5 and current_now.minute == 15 and last_report_date != current_now.date():
+        if current_now.hour == 0 and current_now.minute == 0 and last_report_date != current_now.date():
             generate_daily_report(file_path=DB_FILE)
             last_report_date = current_now.date()
+
+
 
         current_timestamp = time.time()
         if current_timestamp - last_nobitex_update > 600 or dollar_price is None:
@@ -697,7 +701,7 @@ def monitor_market():
                             logger.warning(f"📉 حد ضرر فرضی برای {symbol} در قیمت {price_in_toman:,} تومان لمس شد.")
                             simulate_sell_trade(symbol, current_price, dollar_price, reason="Stop Loss (Paper)")
 
-                            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            now_str = now_shamsi
                             past_trade = {
                                 "type": "PAPER_TRADE",
                                 "entry_time": position.get("updated_at", "نامشخص"),
@@ -716,7 +720,7 @@ def monitor_market():
                             logger.info(f"🎯 حد سود فرضی برای {symbol} در قیمت {price_in_toman:,} تومان لمس شد.")
                             simulate_sell_trade(symbol, current_price, dollar_price, reason="Take Profit (Paper)")
 
-                            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            now_str = now_shamsi
                             past_trade = {
                                 "type": "PAPER_TRADE",
                                 "entry_time": position.get("updated_at", "نامشخص"),
@@ -744,7 +748,7 @@ def monitor_market():
                             if coin_balance < (BUDGET_TOMAN / (position.get("entry_price") or 1)) * 0.05:
                                 logger.info(f"🎉 [خروج موفق OCO] اردر OCO ارز {symbol} در صرافی با موفقیت اجرا و بسته شد.")
 
-                                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                now_str = now_shamsi
                                 past_trade = {
                                     "type": "REAL_OCO_TRADE",
                                     "entry_time": position.get("updated_at", "نامشخص"),
@@ -814,7 +818,7 @@ def monitor_market():
                                 oco_success = place_nobitex_oco_sell_order(symbol, real_quantity, final_target, final_stop)
 
                             if oco_success:
-                                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                now_str = now_shamsi
                                 last_signals[symbol] = {
                                     "signal": "BUY",
                                     "entry_price": int(price_in_toman * 1.002),
@@ -827,6 +831,26 @@ def monitor_market():
                                 save_last_signals(last_signals)
                                 last_nobitex_update = 0
                                 open_positions_count += 1
+
+                                # =============================================================
+                                # 📧 🎯 کد ارسال ایمیل رو دقیقاً اینجا (بعد از save_last_signals) اضافه کن:
+                                # =============================================================
+                                trade_mode = "تست فرضی (Paper)" if PAPER_TRADING else "معامله واقعی"
+                                rows_data = [
+                                    ("جفت ارز", symbol),
+                                    ("حالت معامله", trade_mode),
+                                    ("قیمت ورود", f"{int(price_in_toman * 1.002):,} تومان"),
+                                    ("تارگت OCO", f"{final_target:,} تومان"),
+                                    ("استاپ OCO", f"{final_stop:,} تومان"),
+                                    ("مقدار خرید", f"{real_quantity:.4f}")
+                                ]
+                                send_beautiful_email(
+                                    subject=f"🚀 سیگنال خرید {symbol} ({trade_mode})",
+                                    title=f"خرید موفقیت‌آمیز {symbol}",
+                                    type_color="#10b981",  # رنگ سبز تم ایمیل
+                                    rows_data=rows_data
+                                )
+                                # =============================================================
                         else:
                             logger.error(f"❌ خطای بحرانی: سفارش {order_id} در نوبیتکس پر نشد! پوزیشن ذخیره نشد.")
 
@@ -840,32 +864,36 @@ def monitor_market():
             log_file.write(f"\n--- چرخه بعدی پایش در ۳۰۰ ثانیه آینده ---\n\n")
         time.sleep(300)
 
-def generate_daily_report():
+
+def generate_daily_report(file_path):
     logger.info("📊 در حال محاسبه و تولید کارنامه معاملات ۲۴ ساعت گذشته...")
-    file_path = "live_signals_v3.json"
+    file_path = "live_signals_v3.json"  # ⚠️ حواست به ورژن نام فایل (v2 یا v3) باشد
 
     if not os.path.exists(file_path):
         logger.warning("⚠️ فایلی برای گزارش‌گیری یافت نشد.")
         return None
 
     try:
-        with open(file_path, 'r') as f:
+        with open(file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
     except Exception as e:
         logger.error(f"❌ خطا در خواندن فایل دیتابیس برای گزارش‌گیری: {e}")
         return None
 
-    now = datetime.now()
+    now = now_shamsi
     total_trades = 0
     profitable_trades = 0
     total_profit_loss_toman = 0
 
     report_lines = []
     report_lines.append(f"📅 **گزارش عملکرد ربات نوسان‌گیری**")
-    report_lines.append(f"⏱️ زمان تولید گزارش: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+    report_lines.append(f"⏱️ زمان تولید گزارش: {now_shamsi}")
     report_lines.append("=" * 40)
 
     for symbol, config in data.items():
+        if not isinstance(config, dict):
+            continue
+
         history = config.get("trade_history", [])
         for trade in history:
             exit_time_str = trade.get("exit_time", "")
@@ -887,8 +915,7 @@ def generate_daily_report():
                 else:
                     pnl_percent = 0.0
 
-                # فرض بر این است که با BUDGET_TOMAN وارد هر پوزیشن می‌شوی
-                # سود یا زیان تومانی خالص روی این پوزیشن
+                # محاسبه سود یا زیان تومانی خالص روی این پوزیشن
                 trade_pnl_toman = int(BUDGET_TOMAN * (pnl_percent / 100))
                 total_profit_loss_toman += trade_pnl_toman
 
@@ -900,7 +927,7 @@ def generate_daily_report():
 
                 report_lines.append(
                     f"{status_emoji} **{symbol}** ({trade_type})\n"
-                    f"   📥 ورود: {entry_p:,} | 📤 خروج: {exit_p:,} تومان\n"
+                    f"   📥 ورود: {int(entry_p):,} | 📤 خروج: {int(exit_p):,} تومان\n"
                     f"   📈 بازدهی: {pnl_percent:+.2f}% ({trade_pnl_toman:+,} تومان)"
                 )
                 report_lines.append("-" * 30)
@@ -908,6 +935,7 @@ def generate_daily_report():
     # 📈 محاسبه آمار کلی
     win_rate = (profitable_trades / total_trades * 100) if total_trades > 0 else 0.0
     pnl_color = "🟢" if total_profit_loss_toman >= 0 else "🔴"
+    email_theme_color = "#10b981" if total_profit_loss_toman >= 0 else "#ef4444"
 
     summary_section = [
         "== 🎯 خلاصه وضعیت امروز ==",
@@ -918,18 +946,47 @@ def generate_daily_report():
         "========================================"
     ]
 
-    # چسباندن خلاصه به بالای گزارش
+    # چسباندن خلاصه به بالای گزارش جهت چاپ در ترمینال و فایل لاگ
     final_report = "\n".join(summary_section + [""] + report_lines)
-
     print(final_report)  # نمایش در ترمینال
 
-    # 📧 ارسال ایمیل در صورت وجود معامله
+    # 📝 ۱. ثبت گزارش نهایی در فایل متنی market_monitor.log
+    with open("market_monitor.log", "a", encoding="utf-8") as log_file:
+        log_file.write(f"\n\n=== 🕒 ثبت گزارش ۲۴ ساعته شبانه سیستم ({now.strftime('%Y-%m-%d')}) ===\n")
+        log_file.write(final_report)
+        log_file.write("\n======================================================\n\n")
+
+    # 📧 ۲. ارسال ایمیل زیبا از وضعیت کارنامه شبانه
     if total_trades > 0:
-        # اینجا می‌توانی از همان تابع ارسال ایمیل خودت استفاده کنی
-        # send_email_notification("📊 کارنامه روزانه ربات نوسان‌گیری", final_report)
+        rows_data = [
+            ("تعداد کل معاملات امروز", str(total_trades)),
+            ("معاملات سودده (برنده)", f"🟢 {profitable_trades}"),
+            ("معاملات زیان‌ده (بازنده)", f"🔴 {total_trades - profitable_trades}"),
+            ("درصد موفقیت (Win Rate)", f"{win_rate:.2f}%"),
+            ("سود/زیان خالص ۲۴ ساعت", f"{total_profit_loss_toman:,} تومان"),
+            ("وضعیت نهایی بازدهی", "سودده" if total_profit_loss_toman >= 0 else "زیان‌ده")
+        ]
+
+        send_beautiful_email(
+            subject=f"📊 کارنامه عملکرد ۲۴ ساعته ربات معاملاتی ({now.strftime('%Y-%m-%d')})",
+            title=f"گزارش سود و زیان روزانه - وضعیت نهایی: {rows_data[5][1]}",
+            type_color=email_theme_color,  # اگر سودده باشد سبز، در غیر این‌صورت قرمز می‌شود
+            rows_data=rows_data
+        )
         logger.info("📧 گزارش روزانه با موفقیت به ایمیل ارسال شد.")
     else:
-        logger.info("💤 امروز معامله بسته‌شده‌ای وجود نداشت؛ ایمیلی ارسال نشد.")
+        # حتی اگر معامله‌ای نبود هم یک ایمیل وضعیت جهت اطمینان از زنده بودن ربات بفرستد
+        rows_data = [
+            ("وضعیت معاملات", "امروز هیچ پوزیشنی بسته نشده است."),
+            ("تعداد معامله", "0")
+        ]
+        send_beautiful_email(
+            subject=f"💤 گزارش وضعیت ربات معاملاتی ({now.strftime('%Y-%m-%d')})",
+            title="امروز معامله بسته‌شده‌ای وجود نداشت",
+            type_color="#1e293b",  # رنگ سرمه‌ای خنثی
+            rows_data=rows_data
+        )
+        logger.info("💤 امروز معامله بسته‌شده‌ای وجود نداشت؛ ایمیل خلاصه (ربات زنده است) ارسال شد.")
 
     return final_report
 
