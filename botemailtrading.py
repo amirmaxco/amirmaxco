@@ -18,7 +18,7 @@ from datetime import datetime
 PAPER_TRADING = True
 RISK_PERCENT = 2.0
 MAX_DAILY_TRADES = 5
-MAX_OPEN_POSITIONS = 5
+MAX_OPEN_POSITIONS = 3
 
 # تعاریف وضعیت‌های ربات
 STATE_IDLE = "IDLE"
@@ -256,7 +256,7 @@ def get_kucoin_data(symbol, timeframe, limit=300):
         return None
 
 
-def calculate_ut_bot_2h_live(df, sensitivity=3, atr_period=10):
+def calculate_ut_bot_2h_live(df, sensitivity=4, atr_period=14):
     if len(df) < 25:
         df['signal'] = 'HOLD'
         return df
@@ -617,7 +617,7 @@ def monitor_market():
                 if df is None or df.empty or len(df) < 25:
                     continue
 
-                df = calculate_ut_bot_2h_live(df, sensitivity=3, atr_period=10)
+                df = calculate_ut_bot_2h_live(df, sensitivity=4, atr_period=14)
 
                 live_row = df.iloc[-1]
                 signal_row = df.iloc[-2]
@@ -685,17 +685,90 @@ def monitor_market():
                 print(f"{color_code}{clean_console_line}{RESET}")
 
                 # خط جداکننده زیر هر ارز در کنسول
-                print(
-                    f"{color_code}----------------------------------------------------------------------------------{RESET}")
+                print(f"{color_code}----------------------------------------------------------------------------------{RESET}")
 
-                # 🟢 سناریوی اول: صادر شدن سیگنال خرید جدید
-                if current_signal == 'BUY':
+                # =============================================================
+                # 🛡️ سناریوی اول: مدیریت خروج پوزیشن باز (مستقل و امن در برابر خطای شبکه)
+                # =============================================================
+                if position["signal"] == 'BUY':
+                    if PAPER_TRADING:
+                        # بررسی دقیق قیمت لایو فقط با اهدافی که از قبل فیکس و ذخیره شده بودند
+                        if price_in_toman <= position["stop_price"]:
+                            logger.warning(f"📉 حد ضرر فرضی برای {symbol} در قیمت {price_in_toman:,} تومان لمس شد.")
+                            simulate_sell_trade(symbol, current_price, dollar_price, reason="Stop Loss (Paper)")
+
+                            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            past_trade = {
+                                "type": "PAPER_TRADE",
+                                "entry_time": position.get("updated_at", "نامشخص"),
+                                "exit_time": now_str,
+                                "entry_price": position.get("entry_price", 0.0),
+                                "exit_price": int(price_in_toman),
+                                "reason": "Stop Loss (Paper)"
+                            }
+                            last_signals[symbol] = {
+                                "signal": "HOLD", "entry_price": 0.0, "target_price": 0.0, "stop_price": 0.0,
+                                "oco_order_id": None, "updated_at": now_str, "trade_history": position.get("trade_history", []) + [past_trade]
+                            }
+                            save_last_signals(last_signals)
+
+                        elif price_in_toman >= position["target_price"]:
+                            logger.info(f"🎯 حد سود فرضی برای {symbol} در قیمت {price_in_toman:,} تومان لمس شد.")
+                            simulate_sell_trade(symbol, current_price, dollar_price, reason="Take Profit (Paper)")
+
+                            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            past_trade = {
+                                "type": "PAPER_TRADE",
+                                "entry_time": position.get("updated_at", "نامشخص"),
+                                "exit_time": now_str,
+                                "entry_price": position.get("entry_price", 0.0),
+                                "exit_price": int(price_in_toman),
+                                "reason": "Take Profit (Paper)"
+                            }
+                            last_signals[symbol] = {
+                                "signal": "HOLD", "entry_price": 0.0, "target_price": 0.0, "stop_price": 0.0,
+                                "oco_order_id": None, "updated_at": now_str, "trade_history": position.get("trade_history", []) + [past_trade]
+                            }
+                            save_last_signals(last_signals)
+
+                    else:
+                        # 💼 مدیریت پوزیشن واقعی در صرافی نوبیتکس با چک کردن ولت
+                        url_wallet = "https://apiv2.nobitex.ir/v2/wallets"
+                        headers = {"Authorization": f"Token {NOBITEX_TOKEN_PUBLIC}", "Content-Type": "application/json"}
+
+                        res_w = _send_request_with_retry("POST", url_wallet, headers=headers, json_data={})
+                        if res_w and res_w.get("status") == "ok":
+                            wallets = res_w.get("wallets", {})
+                            coin_balance = float(wallets.get(coin_name_lower.upper(), {}).get("balance", 0.0))
+
+                            if coin_balance < (BUDGET_TOMAN / (position.get("entry_price") or 1)) * 0.05:
+                                logger.info(f"🎉 [خروج موفق OCO] اردر OCO ارز {symbol} در صرافی با موفقیت اجرا و بسته شد.")
+
+                                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                past_trade = {
+                                    "type": "REAL_OCO_TRADE",
+                                    "entry_time": position.get("updated_at", "نامشخص"),
+                                    "exit_time": now_str,
+                                    "entry_price": position.get("entry_price", 0.0),
+                                    "exit_price": int(price_in_toman),
+                                    "reason": "اجرای حد سود یا حد ضرر OCO در صرافی نوبیتکس"
+                                }
+
+                                last_signals[symbol] = {
+                                    "signal": "HOLD", "entry_price": 0.0, "target_price": 0.0, "stop_price": 0.0,
+                                    "oco_order_id": None, "updated_at": now_str, "trade_history": position.get("trade_history", []) + [past_trade]
+                                }
+                                save_last_signals(last_signals)
+
+                # =============================================================
+                # 🟢 سناریوی دوم: صادر شدن سیگنال خرید جدید (فقط برای جفت‌ارزهای بدون پوزیشن)
+                # =============================================================
+                elif current_signal == 'BUY':
                     if position["signal"] == "BUY":
                         continue
 
                     if 'MAX_OPEN_POSITIONS' in globals() and open_positions_count >= MAX_OPEN_POSITIONS:
-                        logger.warning(
-                            f"⚠️ سیگنال خرید {symbol} رد شد. سقف پوزیشن‌های باز ({MAX_OPEN_POSITIONS}) پر است.")
+                        logger.warning(f"⚠️ سیگنال خرید {symbol} رد شد. سقف پوزیشن‌های باز ({MAX_OPEN_POSITIONS}) پر است.")
                         continue
 
                     dollar_price = get_iran_dollar_price()
@@ -714,8 +787,7 @@ def monitor_market():
                     final_stop = int(price_in_toman * (1 - loss_pct))
 
                     # ثبت سفارش خرید با قیمت واقعی لایو نوبیتکس
-                    order_success, order_id = place_buy_order_and_notify(symbol, price_in_toman,
-                                                                         budget_toman=BUDGET_TOMAN)
+                    order_success, order_id = place_buy_order_and_notify(symbol, price_in_toman, budget_toman=BUDGET_TOMAN)
 
                     if order_success:
                         if PAPER_TRADING:
@@ -738,10 +810,8 @@ def monitor_market():
 
                         if real_quantity > 0:
                             if not PAPER_TRADING:
-                                logger.info(
-                                    f"📈 [تکمیل خرید واقعی] مقدار خالص معامله شده بعد کارمزد: {real_quantity:.4f}")
-                                oco_success = place_nobitex_oco_sell_order(symbol, real_quantity, final_target,
-                                                                           final_stop)
+                                logger.info(f"📈 [تکمیل خرید واقعی] مقدار خالص معامله شده بعد کارمزد: {real_quantity:.4f}")
+                                oco_success = place_nobitex_oco_sell_order(symbol, real_quantity, final_target, final_stop)
 
                             if oco_success:
                                 now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -759,70 +829,6 @@ def monitor_market():
                                 open_positions_count += 1
                         else:
                             logger.error(f"❌ خطای بحرانی: سفارش {order_id} در نوبیتکس پر نشد! پوزیشن ذخیره نشد.")
-
-                # 🔴 سناریوی دوم: مدیریت پوزیشن باز
-                elif position["signal"] == 'BUY':
-                    if PAPER_TRADING:
-                        if current_signal == 'SELL' or price_in_toman <= position["stop_price"] or price_in_toman >= \
-                                position["target_price"]:
-                            reason = "تارگت فرضی" if price_in_toman >= position[
-                                "target_price"] else "حد ضرر یا سیگنال معکوس"
-                            simulate_sell_trade(symbol, current_price, dollar_price, reason=f"📉 {reason} (حالت تست)")
-
-                            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            past_trade = {
-                                "type": "PAPER_TRADE",
-                                "entry_time": position.get("updated_at", "نامشخص"),
-                                "exit_time": now_str,
-                                "entry_price": position.get("entry_price", 0.0),
-                                "exit_price": int(price_in_toman),
-                                "reason": reason
-                            }
-
-                            last_signals[symbol] = {
-                                "signal": "HOLD",
-                                "entry_price": 0.0,
-                                "target_price": 0.0,
-                                "stop_price": 0.0,
-                                "oco_order_id": None,
-                                "updated_at": now_str,
-                                "trade_history": position.get("trade_history", []) + [past_trade]
-                            }
-                            save_last_signals(last_signals)
-
-                    else:
-                        url_wallet = "https://apiv2.nobitex.ir/v2/wallets"
-                        headers = {"Authorization": f"Token {NOBITEX_TOKEN_PUBLIC}", "Content-Type": "application/json"}
-
-                        res_w = _send_request_with_retry("POST", url_wallet, headers=headers, json_data={})
-                        if res_w and res_w.get("status") == "ok":
-                            wallets = res_w.get("wallets", {})
-                            coin_balance = float(wallets.get(coin_name_lower.upper(), {}).get("balance", 0.0))
-
-                            if coin_balance < (BUDGET_TOMAN / (position.get("entry_price") or 1)) * 0.05:
-                                logger.info(
-                                    f"🎉 [خروج موفق OCO] اردر OCO ارز {symbol} در صرافی با موفقیت اجرا و بسته شد.")
-
-                                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                                past_trade = {
-                                    "type": "REAL_OCO_TRADE",
-                                    "entry_time": position.get("updated_at", "نامشخص"),
-                                    "exit_time": now_str,
-                                    "entry_price": position.get("entry_price", 0.0),
-                                    "exit_price": int(price_in_toman),
-                                    "reason": "اجرای حد سود یا حد ضرر OCO در صرافی نوبیتکس"
-                                }
-
-                                last_signals[symbol] = {
-                                    "signal": "HOLD",
-                                    "entry_price": 0.0,
-                                    "target_price": 0.0,
-                                    "stop_price": 0.0,
-                                    "oco_order_id": None,
-                                    "updated_at": now_str,
-                                    "trade_history": position.get("trade_history", []) + [past_trade]
-                                }
-                                save_last_signals(last_signals)
 
                 time.sleep(0.2)
             except Exception as e:
