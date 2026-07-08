@@ -357,39 +357,35 @@ def place_buy_order_and_notify(symbol, price_toman, budget_toman):
 
     # ۱. دریافت موجودی زنده ولت قبل از خرید
     total_balance = get_nobitex_wallet_balance()
-
-    # 🔍 لاگ حیاتی برای عیب‌یابی: اینجا مچ توکن و صرافی را می‌گیریم
     logger.info(f"🔍 [بررسی ولت قبل از خرید] موجودی دریافت شده توسط ربات: {total_balance} تومان")
 
-    # ۲. تعیین بودجه (اگر موجودی صفر بیاید، این فرمول خراب می‌شود)
+    # ۲. تعیین بودجه امن
     if total_balance > 0:
         calculated_budget = total_balance * (RISK_PERCENT / 100)
         final_budget = max(calculated_budget, budget_toman)
 
-        # گارد محافظتی: اگر بودجه متمایل به کل موجودی بود، آن را محدود کن
         if final_budget >= total_balance * 0.95:
             safe_budget_toman = total_balance * 0.95
         else:
             safe_budget_toman = final_budget
     else:
-        # 🚨 اگر موجودی به هر دلیلی ۰ برگشت، بودجه امن را همان بودجه ورودی فرض میکنیم
         logger.warning("⚠️ موجودی ولت توسط صرافی ۰ یا نامعتبر برگشت! استفاده از بودجه پیش‌فرض.")
         safe_budget_toman = budget_toman
 
-    # ۳. دریافت قیمت زنده و محاسبه پارامترهای شبیه‌ساز مارکت
+    # ۳. دریافت قیمت زنده نوبیتکس
     live_price_toman = get_nobitex_live_price(coin_name) or price_toman
 
-    # قیمت خرید را ۵٪ بالاتر می‌گذاریم تا صرافی آنی در مارکت پر کند
-    simulated_price_rial = int((live_price_toman * 1.05) * 10)
+    # ✅ اصلاح منطق گپ: قیمت خرید لیمیت را ۰.۲٪ بالاتر می‌گذاریم تا آنی پر شود
+    simulated_price_toman = live_price_toman * 1.002
+    simulated_price_rial = int(simulated_price_toman * 10)
 
-    # محاسبه تعداد توکن (amount) بر اساس بودجه امن تومانی
-    calculated_amount = safe_budget_toman / live_price_toman
-    # تبدیل به رشته با دقت ۶ رقم اعشار هماهنگ با نمونه صرافی
+    # ✅ رفع باگ موجودی کافی نیست: محاسبه تعداد توکن بر اساس قیمت نهایی ارسال شده (نه قیمت لایو)
+    calculated_amount = safe_budget_toman / simulated_price_toman
     string_amount = f"{calculated_amount:.6f}"
 
     budget_rial = int(safe_budget_toman * 10)
     logger.info(
-        f"🔥 [ورود مارکت آنی] درخواست خرید {coin_name.upper()} | بودجه ارسالی: {int(safe_budget_toman)} تومان ({budget_rial} ریال)"
+        f"🔥 [ورود مارکت آنی] درخواست خرید {coin_name.upper()} | بودجه ارسالی: {int(safe_budget_toman)} تومان | قیمت لیمیت: {int(simulated_price_toman):,} تومان"
     )
 
     if PAPER_TRADING:
@@ -400,14 +396,13 @@ def place_buy_order_and_notify(symbol, price_toman, budget_toman):
     url = "https://apiv2.nobitex.ir/market/orders/add"
     headers = {"Authorization": f"Token {NOBITEX_TOKEN_PUBLIC}", "Content-Type": "application/json"}
 
-    # 🎯 پِیلود کاملاً هماهنگ با نمونه پست‌من و صرافی شما (شبیه‌ساز مارکت با ساختار Limit)
     payload = {
         "type": "buy",
         "execution": "limit",
         "srcCurrency": coin_name.lower(),
         "dstCurrency": "rls",
-        "amount": string_amount,  # تعداد توکن (رشته)
-        "price": f"{simulated_price_rial}"  # قیمت ریالی بالاتر از بازار (رشته)
+        "amount": string_amount,
+        "price": f"{simulated_price_rial}"
     }
 
     res = _send_request_with_retry("POST", url, headers=headers, json_data=payload)
@@ -416,7 +411,9 @@ def place_buy_order_and_notify(symbol, price_toman, budget_toman):
         order_id = res.get("order", {}).get("id")
         logger.info(f"🟢 خرید مارکت با موفقیت ثبت شد. شناسه اردر: {order_id}.")
         daily_trade_count += 1
-        send_nobitex_order_email(coin_name, price_toman, safe_budget_toman, calculated_amount)
+
+        # ✅ ارسال ایمیل بر اساس قیمت خرید واقعی تنظیم‌شده
+        send_nobitex_order_email(coin_name, simulated_price_toman, safe_budget_toman, calculated_amount)
         return True, order_id
     else:
         if res:
