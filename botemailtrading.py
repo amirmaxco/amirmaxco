@@ -564,6 +564,7 @@ def monitor_market():
         "ONE/USDT", "BICO/USDT"
     ]
 
+    DB_FILE = "live_signals_v2.json"
     last_signals = load_last_signals(symbols)
     last_nobitex_update = 0
     dollar_price = None
@@ -573,11 +574,12 @@ def monitor_market():
     while True:
         current_now = datetime.now()
         current_time_str = current_now.strftime('%Y-%m-%d %H:%M:%S')
+
+        # زمان کلی چرخه فقط یک‌بار در ابتدای لوپ چاپ می‌شود
         print(f"\n🔄 --- چرخه پایش آنی بازار (تایم‌فریم 1h): {current_time_str} ---")
 
-        # ⏱️ خودکارسازی گزارش روزانه: راس ساعت 05:15 صبح کارنامه ۲۴ ساعته را بفرست
         if current_now.hour == 5 and current_now.minute == 15 and last_report_date != current_now.date():
-            generate_daily_report()
+            generate_daily_report(file_path=DB_FILE)
             last_report_date = current_now.date()
 
         current_timestamp = time.time()
@@ -596,18 +598,19 @@ def monitor_market():
 
         print(f"  قیمت دلار (تومان): {dollar_price:,}")
 
-        # شمارش پوزیشن‌های فعال قبل از شروع چرخه خرید جدید
         open_positions_count = sum(
             1 for sym in symbols
             if isinstance(last_signals.get(sym), dict) and last_signals[sym].get("signal") == "BUY"
         )
 
         for symbol in symbols:
-            # 🟢 در ابتدای بررسی هر ارز، متغیرها را کاملاً ریست کن
             position_details = ""
             plain_log_line = ""
             color_code = BLUE
             status_display = "HOLD"
+
+            # ✅ تعریف نام کوچک کوین در ابتدای بررسی برای استفاده در توابع نوبیتکس
+            coin_name_lower = symbol.split('/')[0].lower()
 
             try:
                 df = get_kucoin_data(symbol, timeframe=timeframe, limit=300)
@@ -615,12 +618,21 @@ def monitor_market():
                     continue
 
                 df = calculate_ut_bot_2h_live(df, sensitivity=3, atr_period=10)
-                live_row = df.iloc[-1]
-                current_price = live_row['close']
-                current_signal = live_row['signal']
-                atr_value = live_row['ATR']
 
-                price_in_toman = current_price * dollar_price
+                live_row = df.iloc[-1]
+                signal_row = df.iloc[-2]
+
+                current_price = live_row['close']
+                current_signal = signal_row['signal']
+                atr_value = signal_row['ATR']
+
+                # ✅ استعلام مستقیم قیمت تومانی لایو از خود نوبیتکس جهت همسان‌سازی ۱۰۰٪ با چارت
+                nobitex_real_price = get_nobitex_live_price(coin_name_lower)
+                if nobitex_real_price:
+                    price_in_toman = nobitex_real_price
+                else:
+                    price_in_toman = current_price * dollar_price
+
                 toman_str = f"{price_in_toman:,.2f}" if price_in_toman < 100 else f"{int(price_in_toman):,}"
 
                 position = last_signals.get(symbol, {"signal": "HOLD", "entry_price": 0.0, "target_price": 0.0,
@@ -631,7 +643,6 @@ def monitor_market():
                     position = {"signal": position, "entry_price": 0.0, "target_price": 0.0, "stop_price": 0.0,
                                 "oco_order_id": None, "updated_at": current_time_str, "trade_history": []}
 
-                # ✅ بخش تشخیص وضعیت
                 if position and position.get("signal") == 'BUY':
                     color_code = GREEN
                     status_display = "BUY (OCO active)"
@@ -640,17 +651,14 @@ def monitor_market():
                     p_target = position.get("target_price", 0)
                     p_stop = position.get("stop_price", 0)
 
-                    # محاسبات تعداد و سود/زیان احتمالی
                     calc_qty = BUDGET_TOMAN / p_entry if p_entry > 0 else 0.0
                     potential_profit = (p_target - p_entry) * calc_qty if p_entry > 0 else 0.0
                     potential_loss = (p_entry - p_stop) * calc_qty if p_entry > 0 else 0.0
 
-                    # ساخت رشته‌های فرمت‌شده به صورت جداگانه برای جلوگیری از تداخل سینتکس
                     qty_formatted = f"{calc_qty:.3f}"
                     target_formatted = f"{p_target:,}"
                     stop_formatted = f"{p_stop:,}"
 
-                    # ساخت ساختار جزئیات بدون تداخل فرمت‌دهی
                     position_details = (
                         f" | تعداد: {qty_formatted:<8}"
                         f" | هدف: {target_formatted:<10}"
@@ -662,30 +670,32 @@ def monitor_market():
                     color_code = RED
                     status_display = "SELL"
                     position_details = " | تعداد: -        | هدف: -          | استاپ: -         | سود/زیان: -"
-
                 else:
                     color_code = BLUE
                     status_display = "HOLD"
                     position_details = " | تعداد: -        | هدف: -          | استاپ: -         | سود/زیان: -"
 
-                # 📄 ساخت نسخه تمیز بدون کد رنگی برای فایل لاگ
+                # ساخت لاگ تمیز برای فایل متنی متنی
                 plain_log_line = f"📊 {symbol:<10} | قیمت: {toman_str:<10} تومان | وضعیت: {status_display:<18}{position_details} | زمان: {current_time_str}"
-
-                # 📝 ذخیره خودکار در فایل متنی
                 with open("market_monitor.log", "a", encoding="utf-8") as log_file:
                     log_file.write(plain_log_line + "\n")
 
-                # 📊 چاپ در ترمینال با رنگ مخصوص به خود
-                print(f"{color_code}{plain_log_line}{RESET}")
+                # چاپ در ترمینال بدون نمایش تاریخ تکراری در انتهای هر خط
+                clean_console_line = f"📊 {symbol:<10} | قیمت: {toman_str:<10} تومان | وضعیت: {status_display:<18}{position_details}"
+                print(f"{color_code}{clean_console_line}{RESET}")
+
+                # خط جداکننده زیر هر ارز در کنسول
+                print(
+                    f"{color_code}----------------------------------------------------------------------------------{RESET}")
 
                 # 🟢 سناریوی اول: صادر شدن سیگنال خرید جدید
                 if current_signal == 'BUY':
                     if position["signal"] == "BUY":
                         continue
 
-                    # ✅ اصلاح دنده‌گذاری گارد محافظتی سقف پوزیشن‌های باز
                     if 'MAX_OPEN_POSITIONS' in globals() and open_positions_count >= MAX_OPEN_POSITIONS:
-                        logger.warning(f"⚠️ سیگنال خرید {symbol} رد شد. سقف پوزیشن‌های باز ({MAX_OPEN_POSITIONS}) پر است.")
+                        logger.warning(
+                            f"⚠️ سیگنال خرید {symbol} رد شد. سقف پوزیشن‌های باز ({MAX_OPEN_POSITIONS}) پر است.")
                         continue
 
                     dollar_price = get_iran_dollar_price()
@@ -693,13 +703,23 @@ def monitor_market():
                         logger.error(f"❌ خرید {symbol} به دلیل قطع ناگهانی شبکه در لحظه دریافت قیمت تتر لغو شد.")
                         continue
 
+                    # محاسبه قیمت مبنای استراتژی از روی کوکوین
                     t_entry, t_target, t_stop = simulate_oco_trade(symbol, current_price, atr_value, dollar_price, df)
+
+                    # ✅ کالیبره کردن اهداف بر اساس درصد روی قیمت واقعی و مچ‌شده‌ی نوبیتکس
+                    profit_pct = (t_target - t_entry) / t_entry if t_entry > 0 else 0.0
+                    loss_pct = (t_entry - t_stop) / t_entry if t_entry > 0 else 0.0
+
+                    final_target = int(price_in_toman * (1 + profit_pct))
+                    final_stop = int(price_in_toman * (1 - loss_pct))
+
+                    # ثبت سفارش خرید با قیمت واقعی لایو نوبیتکس
                     order_success, order_id = place_buy_order_and_notify(symbol, price_in_toman,
                                                                          budget_toman=BUDGET_TOMAN)
 
                     if order_success:
                         if PAPER_TRADING:
-                            real_quantity = 0.0500
+                            real_quantity = BUDGET_TOMAN / (price_in_toman * 1.002)
                             oco_success = True
                             logger.info(f"🛡️ [Paper Trading] سفارش OCO فرضی برای {symbol} ثبت شد.")
                         else:
@@ -717,18 +737,17 @@ def monitor_market():
                             oco_success = False
 
                         if real_quantity > 0:
-                            final_target = int(t_target)
-                            final_stop = int(t_stop)
-
                             if not PAPER_TRADING:
-                                logger.info(f"📈 [تکمیل خرید واقعی] مقدار خالص معامله شده بعد کارمزد: {real_quantity:.4f}")
-                                oco_success = place_nobitex_oco_sell_order(symbol, real_quantity, final_target, final_stop)
+                                logger.info(
+                                    f"📈 [تکمیل خرید واقعی] مقدار خالص معامله شده بعد کارمزد: {real_quantity:.4f}")
+                                oco_success = place_nobitex_oco_sell_order(symbol, real_quantity, final_target,
+                                                                           final_stop)
 
                             if oco_success:
                                 now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                                 last_signals[symbol] = {
                                     "signal": "BUY",
-                                    "entry_price": int(price_in_toman),
+                                    "entry_price": int(price_in_toman * 1.002),
                                     "target_price": final_target,
                                     "stop_price": final_stop,
                                     "oco_order_id": order_id if not PAPER_TRADING else None,
@@ -737,16 +756,18 @@ def monitor_market():
                                 }
                                 save_last_signals(last_signals)
                                 last_nobitex_update = 0
-                                open_positions_count += 1  # افزایش شمارنده برای ارز بعدی همین چرخه
+                                open_positions_count += 1
                         else:
                             logger.error(f"❌ خطای بحرانی: سفارش {order_id} در نوبیتکس پر نشد! پوزیشن ذخیره نشد.")
 
                 # 🔴 سناریوی دوم: مدیریت پوزیشن باز
                 elif position["signal"] == 'BUY':
-
                     if PAPER_TRADING:
-                        if current_signal == 'SELL' or price_in_toman <= position["stop_price"]:
-                            simulate_sell_trade(symbol, current_price, dollar_price, reason="📉 خروج فرضی در حالت تست")
+                        if current_signal == 'SELL' or price_in_toman <= position["stop_price"] or price_in_toman >= \
+                                position["target_price"]:
+                            reason = "تارگت فرضی" if price_in_toman >= position[
+                                "target_price"] else "حد ضرر یا سیگنال معکوس"
+                            simulate_sell_trade(symbol, current_price, dollar_price, reason=f"📉 {reason} (حالت تست)")
 
                             now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             past_trade = {
@@ -755,7 +776,7 @@ def monitor_market():
                                 "exit_time": now_str,
                                 "entry_price": position.get("entry_price", 0.0),
                                 "exit_price": int(price_in_toman),
-                                "reason": "لمس حد ضرر یا سیگنال اندیکاتور (تست فرضی)"
+                                "reason": reason
                             }
 
                             last_signals[symbol] = {
@@ -770,7 +791,6 @@ def monitor_market():
                             save_last_signals(last_signals)
 
                     else:
-                        coin_name_lower = symbol.split('/')[0].lower()
                         url_wallet = "https://apiv2.nobitex.ir/v2/wallets"
                         headers = {"Authorization": f"Token {NOBITEX_TOKEN_PUBLIC}", "Content-Type": "application/json"}
 
@@ -779,8 +799,9 @@ def monitor_market():
                             wallets = res_w.get("wallets", {})
                             coin_balance = float(wallets.get(coin_name_lower.upper(), {}).get("balance", 0.0))
 
-                            if coin_balance < 0.001:
-                                logger.info(f"🎉 [خروج موفق OCO] اردر OCO ارز {symbol} در صرافی با موفقیت اجرا و بسته شد.")
+                            if coin_balance < (BUDGET_TOMAN / (position.get("entry_price") or 1)) * 0.05:
+                                logger.info(
+                                    f"🎉 [خروج موفق OCO] اردر OCO ارز {symbol} در صرافی با موفقیت اجرا و بسته شد.")
 
                                 now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                                 past_trade = {
@@ -808,7 +829,6 @@ def monitor_market():
                 logger.error(f"⚠️ خطا در پردازش {symbol}: {e}")
                 continue
 
-        # 💤 بخش استراحت ۳۰۰ ثانیه‌ای (خارج از حلقه for ارزها)
         print(f"\n💤 استراحت ۳۰۰ ثانیه‌ای تا چرخه بعدی...")
         with open("market_monitor.log", "a", encoding="utf-8") as log_file:
             log_file.write(f"\n--- چرخه بعدی پایش در ۳۰۰ ثانیه آینده ---\n\n")
