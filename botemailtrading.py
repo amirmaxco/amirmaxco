@@ -17,10 +17,10 @@ now_shamsi=jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 # ==========================================
 # 🛑 تنظیمات کلیدی و لایه‌های جدید ربات 🛑
 # ==========================================
-PAPER_TRADING = True
+PAPER_TRADING = False
 RISK_PERCENT = 2.0
-MAX_DAILY_TRADES = 5
-MAX_OPEN_POSITIONS = 5
+MAX_DAILY_TRADES = 6
+MAX_OPEN_POSITIONS = 6
 
 # تعاریف وضعیت‌های ربات
 STATE_IDLE = "IDLE"
@@ -296,6 +296,21 @@ def calculate_ut_bot_2h_live(df, sensitivity=4, atr_period=14):
     return df
 
 
+def estimate_target_time(entry_price, target_price, atr_value, timeframe_hours):
+    if atr_value <= 0:
+        return None
+
+    distance = abs(target_price - entry_price)
+
+    candles = distance / atr_value
+
+    hours = candles * timeframe_hours
+
+    days = hours / 24
+
+    return candles, hours, days
+
+
 def simulate_oco_trade(symbol, current_price, atr_value, dollar_price, df):
     coin_name = symbol.split('/')[0]
     recent_low = df['low'].iloc[-21:-1].min()
@@ -400,7 +415,7 @@ def place_buy_order_and_notify(symbol, price_toman, budget_toman):
 
     payload = {
         "type": "buy",
-        "execution": "limit",
+        "execution": "market",
         "srcCurrency": coin_name.lower(),
         "dstCurrency": "rls",
         "amount": string_amount,
@@ -782,6 +797,27 @@ def monitor_market():
 
                     # محاسبه قیمت مبنای استراتژی از روی کوکوین
                     t_entry, t_target, t_stop = simulate_oco_trade(symbol, current_price, atr_value, dollar_price, df)
+                    print("t_entry =", t_entry)
+                    print("t_target =", t_target)
+                    print("atr_value =", atr_value)
+                    print("dollar_price =", dollar_price)
+
+                    result = estimate_target_time(
+                        t_entry,
+                        t_target,
+                        atr_value * dollar_price,
+                        1
+                    )
+
+                    print("result =", result)
+                    if result:
+                        candles, hours, days = result
+
+                        logger.info(
+                            f"⏳ زمان تقریبی رسیدن به تارگت: "
+                            f"{days:.1f} روز ({hours:.1f} ساعت)"
+                        )
+
 
                     # ✅ کالیبره کردن اهداف بر اساس درصد روی قیمت واقعی و مچ‌شده‌ی نوبیتکس
                     profit_pct = (t_target - t_entry) / t_entry if t_entry > 0 else 0.0
