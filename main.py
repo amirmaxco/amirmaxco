@@ -1,23 +1,17 @@
-from logging.handlers import TimedRotatingFileHandler
-from daily_report import generate_daily_report
-from indicators import calculate_ut_bot_2h_live
-from notifier import send_beautiful_email
-from target import simulate_oco_trade
-from signals import load_last_signals,save_last_signals
-from utils import _send_request_with_retry
-import daily_report
-from target import simulate_oco_trade,simulate_sell_trade,place_nobitex_oco_sell_order,get_nobitex_order_matched_amount,place_buy_order_and_notify,estimate_target_time
-from exchange import get_nobitex_live_price,get_iran_dollar_price,get_nobitex_wallet_balance
+import json
 import os
+from datetime import datetime
+from logging.handlers import TimedRotatingFileHandler
 import jdatetime
-import datetime, time
+import time
 import ta
 import requests
 import logging
-import ccxt
 from dotenv import load_dotenv
 import pandas as pd
-from nobitex_api import NobitexClient
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 load_dotenv()
 
@@ -48,10 +42,10 @@ NOBITEX_TOKEN = os.getenv("NOBITEX_TOKEN")
 logger = logging.getLogger("NobitexBot")
 logger.setLevel(logging.INFO)
 
-exchange = NobitexClient(
-    NOBITEX_TOKEN_PUBLIC=f'{NOBITEX_TOKEN_PUBLIC}',
-    NOBITEX_TOKEN=f'{NOBITEX_TOKEN}'
-)
+SENDER_PASSWORD = os.environ.get("SENDER_PASSWORD")
+SENDER_EMAIL = os.environ.get("SENDER_EMAIL")
+RECEIVER_EMAIL = os.environ.get("RECEIVER_EMAIL")
+CC_EMAIL=os.environ.get("RECEIVER_EMAIL")
 
 log_handler = TimedRotatingFileHandler("nobitex_bot.log", when="midnight", interval=1, backupCount=7, encoding='utf-8')
 log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
@@ -66,7 +60,7 @@ symbols = [
     "LINK/USDT", "UNI/USDT", "LTC/USDT", "BCH/USDT", "TON/USDT",
 
     # 🚀 ارزهای پرطرفدار و ترند بازار
-    "POL/USDT", "ALGO/USDT", "XLM/USDT", "HBAR/USDT", "VET/USDT",
+    "POL/USDT", "ALGO/USDT", "XLM/USDT", "HBAR/USDT"
     "GRT/USDT", "STX/USDT", "ANKR/USDT", "HMSTR/USDT", "DOGS/USDT",
     "TNSR/USDT", "2Z/USDT", "RENDER/USDT", "APE/USDT", "DYDX/USDT",
     "BASED/USDT",
@@ -75,8 +69,531 @@ symbols = [
     "ONE/USDT", "BICO/USDT"
 ]
 
-DB_FILE = "live_signals.json"
-last_signals = load_last_signals(symbols)
+
+def send_nobitex_error_email(coin_name, operation_type, error_message):
+    subject = f"⚠️ [خطای نوبیتکس] عدم انجام {operation_type} {coin_name.upper()}"
+    title = f"🔴 خطا در عملیات {operation_type} صرافی"
+    rows_data = [
+        ("نام ارز دیجیتال", coin_name.upper()),
+        ("نوع عملیات ناموفق", operation_type),
+        ("علت/متن خطا", f"<span style='color: #ef4444; font-weight: bold;'>{error_message}</span>")
+    ]
+    send_beautiful_email(subject, title, "#ef4444", rows_data)
+
+def send_beautiful_email(subject, title, type_color, rows_data):
+    current_time = jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    html_body = f"""
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Tahoma, Arial, sans-serif; direction: rtl; background-color: #f4f6f9; color: #333; padding: 20px; }}
+            .container {{ max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-top: 6px solid {type_color}; }}
+            .header {{ background-color: #1e293b; color: #ffffff; padding: 20px; text-align: center; }}
+            .header h2 {{ margin: 0; font-size: 20px; }}
+            .content {{ padding: 25px; }}
+            .info-table {{ width: 100%; border-collapse: collapse; margin-top: 15px; }}
+            .info-table td {{ padding: 12px; border-bottom: 1px solid #e2e8f0; font-size: 14px; }}
+            .info-table td.label {{ font-weight: bold; color: #4a5568; width: 40%; }}
+            .info-table td.value {{ color: #1a202c; text-align: left; direction: ltr; }}
+            .footer {{ background-color: #f8fafc; padding: 15px; text-align: center; font-size: 11px; color: #718096; border-top: 1px solid #e2e8f0; }}
+        </style>
+    </head>
+    <body dir="rtl">
+        <div class="container">
+            <div class="header"><h2>{title}</h2></div>
+            <div class="content"><table class="info-table">
+    """
+    for label, val in rows_data:
+        html_body += f"<tr><td class='label'>{label}</td><td class='value'>{val}</td></tr>"
+
+    html_body += f"""
+                <tr><td class="label">زمان سیگنال</td><td class="value">{current_time}</td></tr>
+            </table></div>
+            <div class="footer">این یک پیام خودکار از ربات معاملاتی شماست.</div>
+        </div>
+    </body>
+    </html>
+    """
+
+    msg = MIMEMultipart()
+    msg['From'] = SENDER_EMAIL
+    msg['To'] = RECEIVER_EMAIL
+    msg['Subject'] = subject
+
+    recipients = [RECEIVER_EMAIL]
+    if CC_EMAIL:
+        msg['Cc'] = CC_EMAIL
+        recipients.append(CC_EMAIL)
+
+    msg.attach(MIMEText(html_body, 'html', 'utf-8'))
+
+    try:
+        # ✅ استفاده از پورت 465 و SMTP_SSL برای پایداری ۱۰۰٪ در جیمیل
+        server = smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=15)
+        server.login(SENDER_EMAIL, SENDER_PASSWORD)
+        server.sendmail(SENDER_EMAIL, recipients, msg.as_string())
+        server.quit()
+        logger.info("📧 ایمیل با موفقیت ارسال شد.")
+    except Exception as e:
+        logger.error(f"⚠️ خطا در ارسال ایمیل: {e}")
+
+
+
+def calculate_ut_bot_2h_live(df, sensitivity=4, atr_period=14):
+    if len(df) < 60:
+        df['signal'] = 'HOLD'
+        # برای جلوگیری از خطا در کدهای بعدی، ATR را حتی اگر کم بود مقداردهی کن
+        df['ATR'] = 0.0
+        return df
+
+    # اندیکاتورها
+    df['EMA20'] = ta.trend.ema_indicator(df['close'], window=20)
+    df['EMA50'] = ta.trend.ema_indicator(df['close'], window=50)
+    df['RSI'] = ta.momentum.rsi(close=df['close'], window=14)
+    df['Volume_MA'] = df['volume'].rolling(window=20).mean()
+
+    # اضافه کردن ATR که باعث ارور شده بود
+    df['ATR'] = ta.volatility.average_true_range(df['high'], df['low'], df['close'], window=atr_period)
+
+    df['EMA_Slope'] = df['EMA50'].diff()
+    df['signal'] = 'HOLD'
+
+    # حلقه تحلیل
+    for i in range(50, len(df)):
+        # استخراج مقادیر
+        current_price = df['close'].iloc[i]
+        current_volume = df['volume'].iloc[i]
+        v_ma = df['Volume_MA'].iloc[i]
+        rsi_val = df['RSI'].iloc[i]
+        ema20 = df['EMA20'].iloc[i]
+        ema50 = df['EMA50'].iloc[i]
+        ema_slope = df['EMA_Slope'].iloc[i]
+
+        # تعریف وضعیت‌ها
+        is_uptrend = (current_price > ema20) and (ema20 > ema50)
+        is_rsi_healthy = (40 < rsi_val < 70)
+        is_high_volume = (current_volume > (v_ma * 0.4))
+        is_momentum_with_volume = (current_volume > (v_ma * 0.1)) and (current_price > df['high'].rolling(10).max().iloc[i])
+        is_volume_ok = is_high_volume or is_momentum_with_volume
+        is_slope_positive = (ema_slope > 0)
+
+        # منطق واحد (به جای دو بار چک کردن)
+        if is_uptrend and is_rsi_healthy and is_volume_ok and is_slope_positive:
+            df.at[df.index[i], 'signal'] = 'BUY'
+        elif current_price < ema20:
+            df.at[df.index[i], 'signal'] = 'SELL'
+        else:
+            df.at[df.index[i], 'signal'] = 'HOLD'
+
+        # لاگ‌گذاری برای آخرین کندل جهت دیباگ در کنسول
+        if i == len(df) - 1:
+            print(f"DEBUG {df.index[i]} | Signal: {df.at[df.index[i], 'signal']}")
+            print(
+                f"  Conditions: Trend={is_uptrend} | RSI={is_rsi_healthy} | Vol={is_volume_ok} | Slope={is_slope_positive}")
+
+
+    return df
+
+def load_last_signals(symbols):
+    file_path = "live_signals.json"
+    if not os.path.exists(file_path):
+        # ساختار جدید مجهز به فیلد زمان و تاریخچه معامله
+        return {
+            sym: {
+                "signal": "HOLD",
+                "entry_price": 0.0,
+                "target_price": 0.0,
+                "stop_price": 0.0,
+                "oco_order_id": None,
+                "updated_at": jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "trade_history": []
+            } for sym in symbols
+        }
+
+    # تلاش برای خواندن ایمن با تکرار در صورت قفل بودن فایل
+    for _ in range(5):
+        try:
+            with open(file_path, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            time.sleep(0.5)  # نیم ثانیه صبر کن تا پروسس احتمالی دیگر کارش تمام شود
+
+    # اگر کلاً فایل خراب شده بود، دیتای خالی برگردان تا کرش نکند
+    return {}
+
+
+def save_last_signals(data):
+    file_path = "live_signals.json"  # هم‌نام با تابع load
+    temp_file_path = file_path + ".tmp"
+    for _ in range(5):
+        try:
+            with open(temp_file_path, 'w') as f:
+                json.dump(data, f, indent=4)
+            if os.path.exists(temp_file_path):
+                os.replace(temp_file_path, file_path)
+            return True
+        except IOError:
+            time.sleep(0.5)
+    return False
+
+def get_nobitex_live_price(coin_name):
+    url = "https://apiv2.nobitex.ir/market/stats"
+    res = _send_request_with_retry("GET", url, params={"srcCurrency": coin_name.lower(), "dstCurrency": "rls"})
+    #print(res)
+    if res and res.get("status") == "ok":
+        pair = f"{coin_name.lower()}-rls"
+        price_rial = res.get("stats", {}).get(pair, {}).get("latest", None)
+        price_rial=float(price_rial)/10
+        #print(f"{coin_name.upper()}-RLS price: {price_rial}")
+        if price_rial:
+            return float(price_rial)
+    return None
+
+
+def get_nobitex_wallet_balance():
+    if PAPER_TRADING:
+        return 10000000.0  # ۱۰ میلیون تومان موجودی فرضی در حالت تست
+
+    url = "https://apiv2.nobitex.ir/v2/wallets"
+    headers = {
+        "Authorization": f"Token {NOBITEX_TOKEN_PUBLIC}",
+        "Content-Type": "application/json"
+    }
+
+    # ارسال درخواست بدون فیلترهای محدودکننده برای دریافت پاسخ کامل مالتی‌ولت
+    res = _send_request_with_retry("POST", url, headers=headers, json_data={})
+    #print(res)
+    if res and res.get("status") == "ok":
+        wallets = res.get("wallets", {})
+
+        # بررسی وجود کیف پول ریال یا تومان در پاسخ صرافی
+        if "RLS" in wallets:
+            rial_balance = float(wallets["RLS"].get("balance", 0.0))
+            #print(rial_balance/10)
+            return rial_balance / 10.0  # تبدیل به تومان
+        elif "IRT" in wallets:
+            return float(wallets["IRT"].get("balance", 0.0))  # اگر خود تومان بود مستقیم برگردان
+
+    logger.error(f"❌ خطا در دریافت موجودی از نوبیتکس. پاسخ صرافی: {res}")
+    return 0.0
+
+
+def get_iran_dollar_price():
+    url = "https://apiv2.nobitex.ir/v3/orderbook/USDTIRT"
+    res = _send_request_with_retry("GET", url, retries=3)
+
+    # اصلاح شرط برای خواندن مستقیم از روت پاسخ v3
+    if res and res.get('status') == 'ok' and 'lastTradePrice' in res:
+        tether_rial = res['lastTradePrice']
+        # تبدیل ریال به تومان
+        #print(tether_rial/10)
+        return int(float(tether_rial) / 10)
+
+    logger.error("❌ خطای قطعی شبکه یا تغییر ساختار API: پس از ۳ بار تلاش مجدد، دریافت قیمت تتر ناموفق بود.")
+    return None
+
+
+def get_nobitex_data( symbol, timeframe='1h', limit=300):
+    # تبدیل رشته به عدد (بسیار مهم برای API نوبیتکس)
+    tf_map = {'15m': 15, '1h': 60, '4h': 240, '1d': 1440}
+    timeframe = tf_map.get(timeframe, 60)  # اگر تایم‌فریم ناشناخته بود، 60 دقیقه فرض کن
+
+    src = symbol.split('/')[0].lower()
+    dst = symbol.split('/')[1].lower()
+
+    url = f"https://apiv2.nobitex.ir/market/udf/history"
+    params = {
+        "symbol": f"{src.upper()}{dst.upper()}",
+        "resolution": timeframe,  # از مقدارِ عددی استفاده کن
+        "from": int(time.time()) - (limit * timeframe * 60),  # از resolution استفاده کن
+        "to": int(time.time())
+    }
+
+    response = requests.get(url, params=params)
+    data = response.json()
+
+    if data.get('s') == 'ok':
+        df = pd.DataFrame({
+            'timestamp': data['t'],
+            'open': data['o'],
+            'high': data['h'],
+            'low': data['l'],
+            'close': data['c'],
+            'volume': data['v']
+        })
+        return df
+    return None
+
+def _send_request_with_retry(method, url, headers=None, json_data=None, params=None, retries=3):
+    for attempt in range(retries):
+        try:
+            if method.upper() == "POST":
+                res = requests.post(url, headers=headers, json=json_data, timeout=15)
+            else:
+                res = requests.get(url, headers=headers, params=params, timeout=15)
+            return res.json()
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            logger.warning(f"⚠️ خطای شبکه (تلاش {attempt + 1}/{retries}): {e}")
+            if attempt < retries - 1:
+                time.sleep(3)
+            else:
+                logger.error("🚨 قطع کامل اینترنت یا انسداد سرور صرافی.")
+                return {"status": "failed", "message": "Network Error"}
+
+
+def simulate_oco_trade(symbol, current_price, atr_value, dollar_price, df):
+    coin_name = symbol.split('/')[0]
+    recent_low = df['low'].iloc[-21:-1].min()
+
+    stop_raw = min(current_price - (3.0 * atr_value), recent_low * 0.99)
+    risk_amount = current_price - stop_raw
+    target_raw = current_price + (risk_amount * 2.0)
+
+    if stop_raw <= 0:
+        stop_raw = current_price * 0.95
+
+    price_in_toman = current_price * dollar_price
+    target_in_toman = target_raw * dollar_price
+    stop_in_toman = stop_raw * dollar_price
+
+    toman_entry = f"{price_in_toman:,.2f}" if price_in_toman < 100 else f"{int(price_in_toman):,}"
+    toman_target = f"{target_in_toman:,.2f}" if target_in_toman < 100 else f"{int(target_in_toman):,}"
+    toman_stop = f"{stop_in_toman:,.2f}" if stop_in_toman < 100 else f"{int(stop_in_toman):,}"
+
+    subject = f"🎯 [خرید فوری] {coin_name}"
+    title = f"🟢 سیگنال ورود به پوزیشن: {coin_name}"
+
+    rows_data = [
+        ("نام ارز دیجیتال", coin_name),
+        ("قیمت خرید (تومان)", f"{toman_entry} تومان"),
+        ("قیمت خرید (دلار)", f"${current_price:.5f}"),
+        ("حد سود / تارگت (تومان)", f"{toman_target} تومان"),
+        ("حد ضرر / استاپ (تومان)", f"{toman_stop} تومان")
+    ]
+    send_beautiful_email(subject, title, "#10b981", rows_data)
+    return price_in_toman, target_in_toman, stop_in_toman
+
+
+
+def simulate_sell_trade(symbol, current_price, dollar_price, reason="سیگنال اندیکاتور"):
+    coin_name = symbol.split('/')[0]
+    price_in_toman = current_price * dollar_price
+    toman_price = f"{price_in_toman:,.2f}" if price_in_toman < 100 else f"{int(price_in_toman):,}"
+
+    # 🔴 اضافه کردن لاگ به ترمینال قبل از ارسال ایمیل برای شفافیت پایش
+    logger.warning(f"📉 [خروج فرضی] ماشه خروج برای {symbol} چکانده شد! قیمت: {toman_price} تومان | دلیل: {reason}")
+
+    subject = f"🚨 [خروج فوری] {coin_name}"
+    title = f"🔴 سیگنال فروش و خروج: {coin_name}"
+
+    rows_data = [
+        ("نام ارز دیجیتال", coin_name),
+        ("قیمت فروش (دلار)", f"${current_price:.5f}"),
+        ("قیمت فروش (تومان)", f"{toman_price} تومان"),
+        ("دلیل خروج از معامله", reason)
+    ]
+    send_beautiful_email(subject, title, "#ef4444", rows_data)
+
+def place_buy_order_and_notify(symbol, price_toman, budget_toman):
+        global daily_trade_count, PAPER_TRADING
+        coin_name = symbol.split('/')[0].lower()
+
+        if not check_daily_limits():
+            logger.warning("🚫 محدودیت تعداد معاملات روزانه تکمیل شده است.")
+            return False, None
+
+        # ۱. دریافت موجودی زنده ولت قبل از خرید
+        total_balance = get_nobitex_wallet_balance()
+        logger.info(f"🔍 [بررسی ولت قبل از خرید] موجودی دریافت شده توسط ربات: {total_balance} تومان")
+
+        # ۲. تعیین بودجه امن
+        if total_balance > 0:
+            calculated_budget = total_balance * (RISK_PERCENT / 100)
+            final_budget = max(calculated_budget, budget_toman)
+
+            if final_budget >= total_balance * 0.95:
+                safe_budget_toman = total_balance * 0.95
+            else:
+                safe_budget_toman = final_budget
+        else:
+            logger.warning("⚠️ موجودی ولت توسط صرافی ۰ یا نامعتبر برگشت! استفاده از بودجه پیش‌فرض.")
+            safe_budget_toman = budget_toman
+
+        # ۳. دریافت قیمت زنده نوبیتکس
+        live_price_toman = get_nobitex_live_price(coin_name) or price_toman
+
+        # ✅ اصلاح منطق گپ: قیمت خرید لیمیت را ۰.۲٪ بالاتر می‌گذاریم تا آنی پر شود
+        simulated_price_toman = live_price_toman * 1.002
+        simulated_price_rial = int(simulated_price_toman * 10)
+
+        # ✅ رفع باگ موجودی کافی نیست: محاسبه تعداد توکن بر اساس قیمت نهایی ارسال شده (نه قیمت لایو)
+        calculated_amount = safe_budget_toman / simulated_price_toman
+        string_amount = f"{calculated_amount:.6f}"
+
+        budget_rial = int(safe_budget_toman * 10)
+        logger.info(
+            f"🔥 [ورود مارکت آنی] درخواست خرید {coin_name.upper()} | بودجه ارسالی: {int(safe_budget_toman)} تومان | قیمت لیمیت: {int(simulated_price_toman):,} تومان"
+        )
+
+        if PAPER_TRADING:
+            logger.info(f"✨ [Paper Trading] خرید فرضی شبیه‌سازی شد.")
+            daily_trade_count += 1
+            return True, "mock_order_id"
+
+        url = "https://apiv2.nobitex.ir/market/orders/add"
+        headers = {"Authorization": f"Token {NOBITEX_TOKEN_PUBLIC}", "Content-Type": "application/json"}
+
+        payload = {
+            "type": "buy",
+            "execution": "market",
+            "srcCurrency": coin_name.lower(),
+            "dstCurrency": "rls",
+            "amount": string_amount,
+            "price": f"{simulated_price_rial}"
+        }
+
+        res = _send_request_with_retry("POST", url, headers=headers, json_data=payload)
+
+        if res and res.get("status") == "ok":
+            order_id = res.get("order", {}).get("id")
+            logger.info(f"🟢 خرید مارکت با موفقیت ثبت شد. شناسه اردر: {order_id}.")
+            daily_trade_count += 1
+
+            # ✅ ارسال ایمیل بر اساس قیمت خرید واقعی تنظیم‌شده
+            send_nobitex_order_email(coin_name, simulated_price_toman, safe_budget_toman, calculated_amount)
+            return True, order_id
+        else:
+            if res:
+                error_code = res.get("code", "NO_CODE")
+                error_msg = res.get("message", "خطای ناشناخته")
+                full_error_details = f"[{error_code}] {error_msg}"
+            else:
+                full_error_details = "عدم پاسخ صرافی (تایم‌اوت یا قطع ارتباط)"
+
+            logger.error(f"❌ خطای ثبت سفارش خرید مارکت: {full_error_details} | پاسخ کامل سرور: {res}")
+            send_nobitex_error_email(coin_name, "خرید مارکت آنی", full_error_details)
+            return False, None
+
+def send_nobitex_order_email(coin_name, toman_price, budget_toman, quantity):
+    subject = f"🛒 [سفارش نوبیتکس] خرید {coin_name.upper()}"
+    title = f"🔵 سفارش خرید مارکت در نوبیتکس ثبت شد"
+    rows_data = [
+        ("نام ارز دیجیتال", coin_name.upper()),
+        ("قیمت تقریبی هر واحد (تومان)", f"{int(toman_price):,} Toman"),
+        ("تعداد تقریبی خرید", f"{quantity:.4f} {coin_name.upper()}"),
+        ("کل بودجه مصرفی (تومان)", f"{int(budget_toman):,} Toman")
+    ]
+    send_beautiful_email(subject, title, "#1e40af", rows_data)
+
+def get_nobitex_order_matched_amount(order_id):
+    if PAPER_TRADING:
+        return 0.05
+
+    url = "https://apiv2.nobitex.ir/market/orders/status"
+    headers = {"Authorization": f"Token {NOBITEX_TOKEN_PUBLIC}", "Content-Type": "application/json"}
+
+    for _ in range(2):
+        res = _send_request_with_retry("POST", url, headers=headers, json_data={"id": order_id})
+        if res and res.get("status") == "ok":
+            order_info = res["order"]
+            matched_qty = float(order_info.get("matchedAmount", 0.0))
+            if matched_qty > 0:
+                return matched_qty
+        time.sleep(5)
+    return 0.0
+
+
+def place_nobitex_oco_sell_order(symbol, quantity, target_toman, stop_toman):
+    coin_name = symbol.split('/')[0].lower()
+
+    if PAPER_TRADING:
+        logger.info(f"🛡️ [Paper Trading] سفارش OCO فرضی برای {coin_name.upper()} ثبت شد.")
+        send_nobitex_oco_success_email(coin_name, quantity, target_toman, stop_toman)
+        return True
+
+    url = "https://apiv2.nobitex.ir/market/orders/add"
+    headers = {"Authorization": f"Token {NOBITEX_TOKEN_PUBLIC}", "Content-Type": "application/json"}
+
+    target_rial = f"{target_toman:.2f}"
+    stop_rial = f"{stop_toman:.2f}"
+
+    # قیمت نهایی فروش در صورت فعال شدن استاپ لاس
+    stop_limit_toman = stop_toman * 0.99
+    stop_limit_str = f"{stop_limit_toman:.2f}"
+
+    # اصلاح فرمت مقدار اعشار
+    string_amount = f"{quantity:.8f}".rstrip('0').rstrip('.')
+
+    payload = {
+        "type": "sell",
+        "execution": "oco",
+        "srcCurrency": coin_name,
+        "dstCurrency": "rls",
+        "amount": string_amount,
+        "price": target_rial,
+        "stopPrice": stop_rial,
+        "stopLimitPrice": stop_limit_str
+    }
+
+    for attempt in range(4):
+        res = _send_request_with_retry("POST", url, headers=headers, json_data=payload)
+
+        if res and res.get("status") == "ok":
+            order_id = res.get("order", {}).get("id")
+            logger.info(f"🛡️ سفارش OCO واقعی با موفقیت قفل شد. شناسه: {order_id}")
+            send_nobitex_oco_success_email(coin_name, quantity, target_toman, stop_toman)
+            return True
+        else:
+            error_msg = res.get("message", "خطای ناشناخته") if res else "عدم پاسخ صرافی"
+            logger.warning(f"⚠️ تلاش مجدد برای OCO (تلاش {attempt + 1}/4) | علت خطا: {error_msg}")
+            time.sleep(3)
+
+    # اگر از حلقه خارج شد، یعنی ثبت OCO ناموفق بوده است
+    logger.critical("🚨 ثبت OCO ناموفق بود! فعال‌سازی سفارش حد ضرر اضطراری تکی...")
+
+    backup_payload = {
+        "type": "sell",
+        "execution": "stop_limit",
+        "srcCurrency": coin_name,
+        "dstCurrency": "rls",
+        "amount": string_amount,
+        "price": stop_limit_str,
+        "stopPrice": stop_rial
+    }
+
+    _send_request_with_retry("POST", url, headers=headers, json_data=backup_payload)
+
+    # استفاده از ماژول notifier که قبلا ایمپورت کردید
+    send_nobitex_error_email(coin_name, "فروش OCO (خطای مداوم)",
+                                      "سیستم به سفارش استاپ لیمیت اضطراری جایگزین سوییچ کرد.")
+    return False
+
+
+def send_nobitex_oco_success_email(coin_name, quantity, target_toman, stop_toman):
+    subject = f"🛡️ [محافظت OCO] قفل اردر فروش {coin_name.upper()}"
+    title = f"🟢 سپرهای محافظتی OCO با موفقیت ثبت شد"
+    rows_data = [
+        ("نام ارز دیجیتال", coin_name.upper()),
+        ("تعداد دقیق و خالص برای فروش", f"{quantity:.4f} {coin_name.upper()}"),
+        ("حد سود تعیین شده (تومان)", f"{int(target_toman):,} Toman"),
+        ("حد ضرر تعیین شده (تومان)", f"{int(stop_toman):,} Toman")
+    ]
+    send_beautiful_email(subject, title, "#10b981", rows_data)
+
+
+def estimate_target_time(entry_price, target_price, atr_value, timeframe_hours):
+    if atr_value <= 0:
+        return None
+
+    distance = abs(target_price - entry_price)
+
+    candles = distance / atr_value
+
+    hours = candles * timeframe_hours
+
+    days = hours / 24
+
+    return candles, hours, days
 
 def update_drawdown_performance(current_total_balance):
     global max_peak_balance
@@ -139,6 +656,8 @@ def monitor_market():
         "ONE/USDT", "BICO/USDT"
     ]
 
+
+
     DB_FILE = "live_signals.json"
     last_signals = load_last_signals(symbols)
     last_nobitex_update = 0
@@ -147,8 +666,8 @@ def monitor_market():
     last_report_date = None
 
     while True:
-        current_now = datetime.datetime.now()
-        current_time_str = jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        current_now = jdatetime.datetime.now()
+        current_time_str = current_now.strftime("%Y-%m-%d %H:%M:%S")
 
         # زمان کلی چرخه فقط یک‌بار در ابتدای لوپ چاپ می‌شود
         print(f"\n🔄 --- چرخه پایش آنی بازار (تایم‌فریم 1h): {current_time_str} ---")
@@ -164,14 +683,15 @@ def monitor_market():
             current_wallet = get_nobitex_wallet_balance()
             update_drawdown_performance(current_wallet)
             last_nobitex_update = current_timestamp
-
+            print("🔄 در حال به‌روزرسانی اطلاعات عمومی از نوبیتکس (قیمت تتر و موجودی)...")
         if dollar_price is None:
             logger.warning("⚠️ به دلیل عدم دسترسی به قیمت زنده تتر، این چرخه معاملاتی رد می‌شود.")
+            print("⚠️ به دلیل عدم دسترسی به قیمت زنده تتر، این چرخه معاملاتی رد می‌شود.")
             print("💤 استراحت ۶۰ ثانیه‌ای تا چرخه بعدی...")
             time.sleep(60)
             continue
 
-        print(f"  قیمت دلار (تومان): {dollar_price:,}")
+        print(f"  قیمت دلار (تومان): {dollar_price:,}  موجودی حساب شما:  {current_wallet:,}")
 
         open_positions_count = sum(
             1 for sym in symbols
@@ -198,7 +718,7 @@ def monitor_market():
                 signal_row = df.iloc[-2]
 
                 current_price = live_row['close']
-                current_signal = signal_row['signal']
+                current_signal = live_row['signal']
                 atr_value = signal_row['ATR']
 
                 # ✅ استعلام مستقیم قیمت تومانی لایو از خود نوبیتکس جهت همسان‌سازی ۱۰۰٪ با چارت
@@ -214,8 +734,6 @@ def monitor_market():
                     # ابتدا مطمئن شو که قیمت یک عددِ اعشاریِ واقعی است
                     float_price = float(price_in_toman)
                     toman_str = f"{float_price:,.2f}"
-
-
                 except (ValueError, TypeError):
                     toman_str = "0.00"
                     logger.error(f"خطای غیرقابل تبدیل در قیمت: {toman_str}")
@@ -227,7 +745,7 @@ def monitor_market():
                 if isinstance(position, str):
                     position = {"signal": position, "entry_price": 0.0, "target_price": 0.0, "stop_price": 0.0,
                                 "oco_order_id": None, "updated_at": current_time_str, "trade_history": []}
-
+                #print(position)
                 if position and position.get("signal") == 'BUY':
                     color_code = GREEN
                     status_display = "BUY (OCO active)"
@@ -267,6 +785,7 @@ def monitor_market():
 
                 # چاپ در ترمینال بدون نمایش تاریخ تکراری در انتهای هر خط
                 clean_console_line = f"📊 {symbol:<10} | قیمت: {toman_str:<10} تومان | وضعیت: {status_display:<18}{position_details}"
+                print(color_code)
                 print(f"{color_code}{clean_console_line}{RESET}")
 
                 # خط جداکننده زیر هر ارز در کنسول
@@ -282,7 +801,7 @@ def monitor_market():
                             logger.warning(f"📉 حد ضرر فرضی برای {symbol} در قیمت {price_in_toman:,} تومان لمس شد.")
                             simulate_sell_trade(symbol, current_price, dollar_price, reason="Stop Loss (Paper)")
 
-                            now_str = jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            now_str = current_now.strftime("%Y-%m-%d %H:%M:%S")
                             past_trade = {
                                 "type": "PAPER_TRADE",
                                 "entry_time": position.get("updated_at", "نامشخص"),
@@ -295,7 +814,9 @@ def monitor_market():
                                 "signal": "HOLD", "entry_price": 0.0, "target_price": 0.0, "stop_price": 0.0,
                                 "oco_order_id": None, "updated_at": now_str, "trade_history": position.get("trade_history", []) + [past_trade]
                             }
+
                             save_last_signals(last_signals)
+
 
                         elif price_in_toman >= position["target_price"]:
                             logger.info(f"🎯 حد سود فرضی برای {symbol} در قیمت {price_in_toman:,} تومان لمس شد.")
@@ -314,6 +835,7 @@ def monitor_market():
                                 "signal": "HOLD", "entry_price": 0.0, "target_price": 0.0, "stop_price": 0.0,
                                 "oco_order_id": None, "updated_at": now_str, "trade_history": position.get("trade_history", []) + [past_trade]
                             }
+
                             save_last_signals(last_signals)
 
                     else:
@@ -445,11 +967,12 @@ def monitor_market():
                                 ("استاپ OCO", f"{final_stop:,} تومان"),
                                 ("مقدار خرید", f"{real_quantity:.4f}")
                             ]
+
                             send_beautiful_email(
-                                subject=f"🚀 سیگنال خرید {symbol} ({trade_mode})",
-                                title=f"خرید موفقیت‌آمیز {symbol}",
-                                type_color="#10b981",  # رنگ سبز تم ایمیل
-                                rows_data=rows_data
+                                    subject=f"🚀 سیگنال خرید {symbol} ({trade_mode})",
+                                    title=f"خرید موفقیت‌آمیز {symbol}",
+                                    type_color="#10b981",  # رنگ سبز تم ایمیل
+                                    rows_data=rows_data
                             )
                             # =============================================================
                         else:
@@ -458,7 +981,7 @@ def monitor_market():
                 time.sleep(0.2)
             except Exception as e:
                 logger.error(f"⚠️ خطا در پردازش {symbol}: {e}")
-                #print(logger.error(f"⚠️ خطا در پردازش {symbol}: {e}"))
+                print(logger.error(f"⚠️ خطا در پردازش {symbol}: {e}"))
                 continue
 
         print(f"\n💤 استراحت ۳۰۰ ثانیه‌ای تا چرخه بعدی...")
@@ -466,6 +989,140 @@ def monitor_market():
             log_file.write(f"\n--- چرخه بعدی پایش در ۳۰۰ ثانیه آینده ---\n\n")
 
         time.sleep(300)
+
+def check_daily_limits():
+    global daily_trade_count, last_reset_date
+    current_date = time.strftime("%Y-%m-%d")
+    if current_date != last_reset_date:
+        daily_trade_count = 0
+        last_reset_date = current_date
+    return daily_trade_count < MAX_DAILY_TRADES
+
+
+def generate_daily_report(file_path):
+    logger.info("📊 در حال محاسبه و تولید کارنامه معاملات ۲۴ ساعت گذشته...")
+    file_path = "live_signals_v3.json"  # ⚠️ حواست به ورژن نام فایل (v2 یا v3) باشد
+
+    if not os.path.exists(file_path):
+        logger.warning("⚠️ فایلی برای گزارش‌گیری یافت نشد.")
+        return None
+
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+    except Exception as e:
+        logger.error(f"❌ خطا در خواندن فایل دیتابیس برای گزارش‌گیری: {e}")
+        return None
+
+    now = jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    total_trades = 0
+    profitable_trades = 0
+    total_profit_loss_toman = 0
+
+    report_lines = []
+    report_lines.append(f"📅 **گزارش عملکرد ربات نوسان‌گیری**")
+    report_lines.append(f"⏱️ زمان تولید گزارش: {jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}")
+    report_lines.append("=" * 40)
+
+    for symbol, config in data.items():
+        if not isinstance(config, dict):
+            continue
+
+        history = config.get("trade_history", [])
+        for trade in history:
+            exit_time_str = trade.get("exit_time", "")
+            try:
+                exit_time = datetime.strptime(exit_time_str, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                continue
+
+            # ⏱️ فیلتر کردن معاملات ۲۴ ساعت گذشته
+            if (now - exit_time).total_seconds() <= 86400:
+                total_trades += 1
+                entry_p = trade.get("entry_price", 0.0)
+                exit_p = trade.get("exit_price", 0.0)
+                trade_type = trade.get("type", "UNKNOWN")
+
+                # محاسبه درصد سود/زیان این معامله
+                if entry_p > 0:
+                    pnl_percent = ((exit_p - entry_p) / entry_p) * 100
+                else:
+                    pnl_percent = 0.0
+
+                # محاسبه سود یا زیان تومانی خالص روی این پوزیشن
+                trade_pnl_toman = int(BUDGET_TOMAN * (pnl_percent / 100))
+                total_profit_loss_toman += trade_pnl_toman
+
+                if trade_pnl_toman > 0:
+                    profitable_trades += 1
+                    status_emoji = "🟢"
+                else:
+                    status_emoji = "🔴"
+
+                report_lines.append(
+                    f"{status_emoji} **{symbol}** ({trade_type})\n"
+                    f"   📥 ورود: {int(entry_p):,} | 📤 خروج: {int(exit_p):,} تومان\n"
+                    f"   📈 بازدهی: {pnl_percent:+.2f}% ({trade_pnl_toman:+,} تومان)"
+                )
+                report_lines.append("-" * 30)
+
+    # 📈 محاسبه آمار کلی
+    win_rate = (profitable_trades / total_trades * 100) if total_trades > 0 else 0.0
+    pnl_color = "🟢" if total_profit_loss_toman >= 0 else "🔴"
+    email_theme_color = "#10b981" if total_profit_loss_toman >= 0 else "#ef4444"
+
+    summary_section = [
+        "== 🎯 خلاصه وضعیت امروز ==",
+        f"🔢 کل معاملات بسته شده: {total_trades}",
+        f"✅ معاملات سودده: {profitable_trades} | ❌ معاملات زیان‌ده: {total_trades - profitable_trades}",
+        f"📊 درصد موفقیت (Win Rate): {win_rate:.2f}%",
+        f"{pnl_color} کل سود/زیان خالص امروز: {total_profit_loss_toman:,} تومان",
+        "========================================"
+    ]
+
+    # چسباندن خلاصه به بالای گزارش جهت چاپ در ترمینال و فایل لاگ
+    final_report = "\n".join(summary_section + [""] + report_lines)
+    print(final_report)  # نمایش در ترمینال
+
+    # 📝 ۱. ثبت گزارش نهایی در فایل متنی market_monitor.log
+    with open("market_monitor.log", "a", encoding="utf-8") as log_file:
+        log_file.write(f"\n\n=== 🕒 ثبت گزارش ۲۴ ساعته شبانه سیستم ({now.strftime('%Y-%m-%d')}) ===\n")
+        log_file.write(final_report)
+        log_file.write("\n======================================================\n\n")
+
+    # 📧 ۲. ارسال ایمیل زیبا از وضعیت کارنامه شبانه
+    if total_trades > 0:
+        rows_data = [
+            ("تعداد کل معاملات امروز", str(total_trades)),
+            ("معاملات سودده (برنده)", f"🟢 {profitable_trades}"),
+            ("معاملات زیان‌ده (بازنده)", f"🔴 {total_trades - profitable_trades}"),
+            ("درصد موفقیت (Win Rate)", f"{win_rate:.2f}%"),
+            ("سود/زیان خالص ۲۴ ساعت", f"{total_profit_loss_toman:,} تومان"),
+            ("وضعیت نهایی بازدهی", "سودده" if total_profit_loss_toman >= 0 else "زیان‌ده")
+        ]
+
+        send_beautiful_email(
+            subject=f"📊 کارنامه عملکرد ۲۴ ساعته ربات معاملاتی ({now.strftime('%Y-%m-%d')})",
+            title=f"گزارش سود و زیان روزانه - وضعیت نهایی: {rows_data[5][1]}",
+            type_color=email_theme_color,  # اگر سودده باشد سبز، در غیر این‌صورت قرمز می‌شود
+            rows_data=rows_data
+        )
+        logger.info("📧 گزارش روزانه با موفقیت به ایمیل ارسال شد.")
+    else:
+        # حتی اگر معامله‌ای نبود هم یک ایمیل وضعیت جهت اطمینان از زنده بودن ربات بفرستد
+        rows_data = [
+            ("وضعیت معاملات", "امروز هیچ پوزیشنی بسته نشده است."),
+            ("تعداد معامله", "0")
+        ]
+        send_beautiful_email(
+            subject=f"💤 گزارش وضعیت ربات معاملاتی ({now.strftime('%Y-%m-%d')})",
+            title="امروز معامله بسته‌شده‌ای وجود نداشت",
+            type_color="#1e293b",  # رنگ سرمه‌ای خنثی
+            rows_data=rows_data
+        )
+        logger.info("💤 امروز معامله بسته‌شده‌ای وجود نداشت؛ ایمیل خلاصه (ربات زنده است) ارسال شد.")
+
+    return final_report
 
 
 if __name__ == '__main__':
