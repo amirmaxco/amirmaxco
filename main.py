@@ -27,7 +27,7 @@ MAX_DAILY_TRADES = 6
 MAX_OPEN_POSITIONS = 6
 
 timeframe = '1h'
-BUDGET_TOMAN = 300000
+BUDGET_TOMAN = 1200000
 
 daily_trade_count = 0
 last_reset_date = time.strftime("%Y-%m-%d")
@@ -35,7 +35,7 @@ max_peak_balance = 0.0
 
 base_url = "https://apiv2.nobitex.ir"
 
-PAPER_TRADING = True
+PAPER_TRADING = False
 NOBITEX_TOKEN_PUBLIC = os.getenv("NOBITEX_TOKEN_PUBLIC")
 NOBITEX_TOKEN = os.getenv("NOBITEX_TOKEN")
 
