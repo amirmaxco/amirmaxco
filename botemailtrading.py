@@ -17,7 +17,7 @@ now_shamsi=jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 # ==========================================
 # 🛑 تنظیمات کلیدی و لایه‌های جدید ربات 🛑
 # ==========================================
-PAPER_TRADING = False
+PAPER_TRADING = True
 RISK_PERCENT = 2.0
 MAX_DAILY_TRADES = 6
 MAX_OPEN_POSITIONS = 6
@@ -467,54 +467,61 @@ def place_nobitex_oco_sell_order(symbol, quantity, target_toman, stop_toman):
 
     if PAPER_TRADING:
         logger.info(f"🛡️ [Paper Trading] سفارش OCO فرضی برای {coin_name.upper()} ثبت شد.")
-        # ارسال ایمیل را بعد از منطق اصلی یا به صورت ناهمگام انجام بده تا ربات معطل نشود
         send_nobitex_oco_success_email(coin_name, quantity, target_toman, stop_toman)
         return True
 
     url = "https://apiv2.nobitex.ir/market/orders/add"
     headers = {"Authorization": f"Token {NOBITEX_TOKEN_PUBLIC}", "Content-Type": "application/json"}
 
-    target_rial = int(target_toman * 10)
-    stop_rial = int(stop_toman * 10)
-    stop_limit_rial = int(stop_rial * 0.995)
+    target_rial = f"{target_toman:.2f}"
+    stop_rial = f"{stop_toman:.2f}"
 
+    # قیمت نهایی فروش در صورت فعال شدن استاپ لاس (کمی پایین‌تر جهت پر شدن قطعی)
+    stop_limit_toman = stop_toman * 0.99
+    stop_limit_str = f"{stop_limit_toman:.2f}"
+
+    # 💎 اصلاح فرمت مقدار اعشار به صورت پویا (حذف صفرهای اضافی و پشتیبانی تا ۸ رقم اعشار برای ارزهای سنگین)
+    string_amount = f"{quantity:.8f}".rstrip('0').rstrip('.')
+
+    # 🚀 اصلاح اصلی: تغییر execution به oco جهت فعال‌سازی همزمان حد سود و ضرر
     payload = {
         "type": "sell",
-        "execution": "stop_limit",
-        "srcCurrency": coin_name,  # 💎 اصلاح شد: دیگر روی bico قفل نیست و نام ارز واقعی را می‌فرستد
-        "dstCurrency": "rls",
-        "amount": f"{quantity:.4f}",
-        "price": f"{target_rial}",
-        "stopPrice": f"{stop_rial}",
-        "stopLimitPrice": f"{stop_limit_rial}"
+        "execution": "oco",
+        "srcCurrency": coin_name,
+        "dstCurrency": "rls",  # دقت کن: نوبیتکس در برخی APIها قیمت را بر اساس ارز مقصد (ریال/تومان) می‌خواهد
+        "amount": string_amount,
+        "price": target_rial,
+        "stopPrice": stop_rial,
+        "stopLimitPrice": stop_limit_str
     }
 
     for attempt in range(4):
         res = _send_request_with_retry("POST", url, headers=headers, json_data=payload)
         if res and res.get("status") == "ok":
-            logger.info(f"🛡️ سفارش OCO با موفقیت قفل شد. شناسه: {res.get('order', {}).get('id')}")
-            # ابتدا خروجی موفقیت ثبت شود، ایمیل در بک‌گراند برود
+            logger.info(f"🛡️ سفارش OCO واقعی با موفقیت قفل شد. شناسه: {res.get('order', {}).get('id')}")
             send_nobitex_oco_success_email(coin_name, quantity, target_toman, stop_toman)
             return True
 
         error_msg = res.get("message", "خطای ناشناخته") if res else "عدم پاسخ صرافی"
-        logger.warning(f"⚠️ تلاش مجدد برای OCO (تلاش {attempt + 1}/3) | علت خطا: {error_msg} | پاسخ: {res}")
+        logger.warning(f"⚠️ تلاش مجدد برای OCO (تلاش {attempt + 1}/4) | علت خطا: {error_msg} | پاسخ: {res}")
         time.sleep(3)
 
     logger.critical("🚨 ثبت OCO ناموفق بود! فعال‌سازی سفارش حد ضرر اضطراری تکی...")
 
+    # 🚑 اصلاح بخش اضطراری: در صورت شکست OCO، یک استاپ‌لیمیت فروش تکی ثبت می‌شود
     backup_payload = {
         "type": "sell",
         "execution": "stop_limit",
         "srcCurrency": coin_name,
         "dstCurrency": "rls",
-        "amount": f"{quantity:.4f}",
-        "price": f"{stop_limit_rial}",
-        "stopPrice": f"{stop_limit_rial}" if 'stop_line_rial' in locals() else f"{stop_rial}"  # تبرک امنیتی
+        "amount": string_amount,
+        "price": f"{stop_limit_str}",  # قیمتی که روی آن می‌فروشد
+        "stopPrice": f"{stop_rial}"  # ماشه‌ای که با رسیدن به آن اردر فعال می‌شود
     }
     _send_request_with_retry("POST", url, headers=headers, json_data=backup_payload)
 
-    send_nobitex_error_email(coin_name, "فروش OCO (خطای مداوم)", "سیستم به سفارش استاپ لیمیت جایگزین سوییچ کرد.")
+    send_nobitex_error_email(coin_name, "فروش OCO (خطای مداوم)",
+                             "سیستم به سفارش استاپ لیمیت اضطراری جایگزین سوییچ کرد.")
     return False
 
 def update_drawdown_performance(current_total_balance):
@@ -599,8 +606,6 @@ def monitor_market():
             generate_daily_report(file_path=DB_FILE)
             last_report_date = current_now.date()
 
-
-
         current_timestamp = time.time()
         if current_timestamp - last_nobitex_update > 600 or dollar_price is None:
             logger.info("🔄 در حال به‌روزرسانی اطلاعات عمومی از نوبیتکس (قیمت تتر و موجودی)...")
@@ -645,10 +650,12 @@ def monitor_market():
                 current_signal = signal_row['signal']
                 atr_value = signal_row['ATR']
 
+
+
                 # ✅ استعلام مستقیم قیمت تومانی لایو از خود نوبیتکس جهت همسان‌سازی ۱۰۰٪ با چارت
                 nobitex_real_price = get_nobitex_live_price(coin_name_lower)
                 if nobitex_real_price:
-                    price_in_toman = nobitex_real_price
+                     price_in_toman = nobitex_real_price
                 else:
                     price_in_toman = current_price * dollar_price
 
@@ -812,12 +819,10 @@ def monitor_market():
                     print("result =", result)
                     if result:
                         candles, hours, days = result
-
                         logger.info(
                             f"⏳ زمان تقریبی رسیدن به تارگت: "
                             f"{days:.1f} روز ({hours:.1f} ساعت)"
                         )
-
 
                     # ✅ کالیبره کردن اهداف بر اساس درصد روی قیمت واقعی و مچ‌شده‌ی نوبیتکس
                     profit_pct = (t_target - t_entry) / t_entry if t_entry > 0 else 0.0
@@ -848,45 +853,46 @@ def monitor_market():
                                 time.sleep(2)
                             oco_success = False
 
+                        # 🟢 اصلاحیه حیاتی: خروج فرآیند ذخیره‌سازی از شرط لایه OCO جهت جلوگیری از خریدهای مکرر
                         if real_quantity > 0:
                             if not PAPER_TRADING:
                                 logger.info(f"📈 [تکمیل خرید واقعی] مقدار خالص معامله شده بعد کارمزد: {real_quantity:.4f}")
                                 oco_success = place_nobitex_oco_sell_order(symbol, real_quantity, final_target, final_stop)
 
-                            if oco_success:
-                                now_str = jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                                last_signals[symbol] = {
-                                    "signal": "BUY",
-                                    "entry_price": int(price_in_toman * 1.002),
-                                    "target_price": final_target,
-                                    "stop_price": final_stop,
-                                    "oco_order_id": order_id if not PAPER_TRADING else None,
-                                    "updated_at": now_str,
-                                    "trade_history": position.get("trade_history", [])
-                                }
-                                save_last_signals(last_signals)
-                                last_nobitex_update = 0
-                                open_positions_count += 1
+                            # پوزیشن در هر شرایطی قفلِ خرید می‌شود تا از باگ تکرار جلوگیری شود
+                            now_str = jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            last_signals[symbol] = {
+                                "signal": "BUY",
+                                "entry_price": int(price_in_toman * 1.002),
+                                "target_price": final_target,
+                                "stop_price": final_stop,
+                                "oco_order_id": order_id if not PAPER_TRADING else None,
+                                "updated_at": now_str,
+                                "trade_history": position.get("trade_history", [])
+                            }
+                            save_last_signals(last_signals)
+                            last_nobitex_update = 0
+                            open_positions_count += 1
 
-                                # =============================================================
-                                # 📧 🎯 کد ارسال ایمیل رو دقیقاً اینجا (بعد از save_last_signals) اضافه کن:
-                                # =============================================================
-                                trade_mode = "تست فرضی (Paper)" if PAPER_TRADING else "معامله واقعی"
-                                rows_data = [
-                                    ("جفت ارز", symbol),
-                                    ("حالت معامله", trade_mode),
-                                    ("قیمت ورود", f"{int(price_in_toman * 1.002):,} تومان"),
-                                    ("تارگت OCO", f"{final_target:,} تومان"),
-                                    ("استاپ OCO", f"{final_stop:,} تومان"),
-                                    ("مقدار خرید", f"{real_quantity:.4f}")
-                                ]
-                                send_beautiful_email(
-                                    subject=f"🚀 سیگنال خرید {symbol} ({trade_mode})",
-                                    title=f"خرید موفقیت‌آمیز {symbol}",
-                                    type_color="#10b981",  # رنگ سبز تم ایمیل
-                                    rows_data=rows_data
-                                )
-                                # =============================================================
+                            # =============================================================
+                            # 📧 ارسال ایمیل فاکتور و جزییات پوزیشن جدید خرید
+                            # =============================================================
+                            trade_mode = "تست فرضی (Paper)" if PAPER_TRADING else "معامله واقعی"
+                            rows_data = [
+                                ("جفت ارز", symbol),
+                                ("حالت معامله", trade_mode),
+                                ("قیمت ورود", f"{int(price_in_toman * 1.002):,} تومان"),
+                                ("تارگت OCO", f"{final_target:,} تومان"),
+                                ("استاپ OCO", f"{final_stop:,} تومان"),
+                                ("مقدار خرید", f"{real_quantity:.4f}")
+                            ]
+                            send_beautiful_email(
+                                subject=f"🚀 سیگنال خرید {symbol} ({trade_mode})",
+                                title=f"خرید موفقیت‌آمیز {symbol}",
+                                type_color="#10b981",  # رنگ سبز تم ایمیل
+                                rows_data=rows_data
+                            )
+                            # =============================================================
                         else:
                             logger.error(f"❌ خطای بحرانی: سفارش {order_id} در نوبیتکس پر نشد! پوزیشن ذخیره نشد.")
 
