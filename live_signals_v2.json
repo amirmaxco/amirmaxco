@@ -1,0 +1,367 @@
+{
+    "ZIL/USDT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "2026-07-07 22:49:22",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "2026-07-07 19:18:22",
+                "exit_time": "2026-07-07 22:49:22",
+                "entry_price": 542,
+                "exit_price": 531,
+                "reason": "\u0644\u0645\u0633 \u062d\u062f \u0636\u0631\u0631 \u06cc\u0627 \u0633\u06cc\u06af\u0646\u0627\u0644 \u0627\u0646\u062f\u06cc\u06a9\u0627\u062a\u0648\u0631 (\u062a\u0633\u062a \u0641\u0631\u0636\u06cc)"
+            }
+        ]
+    },
+    "TRX/USDT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "2026-07-08 10:48:36",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "2026-07-07 19:18:30",
+                "exit_time": "2026-07-08 10:48:36",
+                "entry_price": 58463,
+                "exit_price": 58790,
+                "reason": "\u0644\u0645\u0633 \u062d\u062f \u0636\u0631\u0631 \u06cc\u0627 \u0633\u06cc\u06af\u0646\u0627\u0644 \u0627\u0646\u062f\u06cc\u06a9\u0627\u062a\u0648\u0631 (\u062a\u0633\u062a \u0641\u0631\u0636\u06cc)"
+            }
+        ]
+    },
+    "SAND/USDT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "2026-07-07 21:45:03",
+        "trade_history": []
+    },
+    "JASMY/USDT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "2026-07-07 22:49:29",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "2026-07-07 20:11:56",
+                "exit_time": "2026-07-07 22:49:29",
+                "entry_price": 814,
+                "exit_price": 779,
+                "reason": "\u0644\u0645\u0633 \u062d\u062f \u0636\u0631\u0631 \u06cc\u0627 \u0633\u06cc\u06af\u0646\u0627\u0644 \u0627\u0646\u062f\u06cc\u06a9\u0627\u062a\u0648\u0631 (\u062a\u0633\u062a \u0641\u0631\u0636\u06cc)"
+            }
+        ]
+    },
+    "SUI/USDT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "2026-07-08 14:48:27",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "2026-07-07 20:12:07",
+                "exit_time": "2026-07-08 14:48:27",
+                "entry_price": 131176,
+                "exit_price": 126959,
+                "reason": "\u062d\u062f \u0636\u0631\u0631 \u06cc\u0627 \u0633\u06cc\u06af\u0646\u0627\u0644 \u0645\u0639\u06a9\u0648\u0633"
+            }
+        ]
+    },
+    "APE/USDT": {
+        "signal": "BUY",
+        "entry_price": 26848,
+        "target_price": 31079,
+        "stop_price": 24652,
+        "oco_order_id": null,
+        "updated_at": "2026-07-08 14:49:01",
+        "trade_history": []
+    },
+    "DYDX/USDT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "1405-04-19 22:02:13",
+        "trade_history": [
+            {
+                "type": "REAL_OCO_TRADE",
+                "entry_time": "2026-07-08 22:35:41",
+                "exit_time": "1405-04-19 22:02:13",
+                "entry_price": 24586,
+                "exit_price": 23222,
+                "reason": "\u0627\u062c\u0631\u0627\u06cc \u062d\u062f \u0633\u0648\u062f \u06cc\u0627 \u062d\u062f \u0636\u0631\u0631 OCO \u062f\u0631 \u0635\u0631\u0627\u0641\u06cc \u0646\u0648\u0628\u06cc\u062a\u06a9\u0633"
+            }
+        ]
+    },
+    "BICO/USDT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "1405-04-21 22:25:30",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-04-18 15:30:47",
+                "exit_time": "1405-04-19 20:46:50",
+                "entry_price": 2510,
+                "exit_price": 2735,
+                "reason": "Take Profit (Paper)"
+            },
+            {
+                "type": "REAL_OCO_TRADE",
+                "entry_time": "1405-04-19 20:46:50",
+                "exit_time": "1405-04-20 00:06:46",
+                "entry_price": 0,
+                "exit_price": 0,
+                "reason": "\u0627\u062c\u0631\u0627\u06cc \u062d\u062f \u0633\u0648\u062f \u06cc\u0627 \u062d\u062f \u0636\u0631\u0631 OCO \u062f\u0631 \u0635\u0631\u0627\u0641\u06cc \u0646\u0648\u0628\u06cc\u062a\u06a9\u0633"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-04-20 00:06:46",
+                "exit_time": "1405-04-21 22:25:30",
+                "entry_price": 2796.2974,
+                "exit_price": 2455,
+                "reason": "Stop Loss (Paper)"
+            }
+        ]
+    },
+    "TNSR/USDT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "1405-04-24 20:34:46",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-04-18 15:53:43",
+                "exit_time": "1405-04-18 23:38:40",
+                "entry_price": 6114,
+                "exit_price": 5866,
+                "reason": "Stop Loss (Paper)"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-04-22 10:59:48",
+                "exit_time": "1405-04-24 20:34:46",
+                "entry_price": 5661,
+                "exit_price": 6221,
+                "reason": "Take Profit (Paper)"
+            }
+        ]
+    },
+    "XLM/USDT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "1405-04-19 22:01:59",
+        "trade_history": [
+            {
+                "type": "REAL_OCO_TRADE",
+                "entry_time": "1405-04-18 22:30:38",
+                "exit_time": "1405-04-19 22:01:59",
+                "entry_price": 33638,
+                "exit_price": 33968,
+                "reason": "\u0627\u062c\u0631\u0627\u06cc \u062d\u062f \u0633\u0648\u062f \u06cc\u0627 \u062d\u062f \u0636\u0631\u0631 OCO \u062f\u0631 \u0635\u0631\u0627\u0641\u06cc \u0646\u0648\u0628\u06cc\u062a\u06a9\u0633"
+            }
+        ]
+    },
+    "POL/USDT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "1405-04-19 23:14:13",
+        "trade_history": [
+            {
+                "type": "REAL_OCO_TRADE",
+                "entry_time": "1405-04-19 21:31:25",
+                "exit_time": "1405-04-19 22:01:56",
+                "entry_price": 14252,
+                "exit_price": 14168,
+                "reason": "\u0627\u062c\u0631\u0627\u06cc \u062d\u062f \u0633\u0648\u062f \u06cc\u0627 \u062d\u062f \u0636\u0631\u0631 OCO \u062f\u0631 \u0635\u0631\u0627\u0641\u06cc \u0646\u0648\u0628\u06cc\u062a\u06a9\u0633"
+            },
+            {
+                "type": "REAL_OCO_TRADE",
+                "entry_time": "1405-04-19 22:01:56",
+                "exit_time": "1405-04-19 23:14:13",
+                "entry_price": 14161,
+                "exit_price": 14256,
+                "reason": "\u0627\u062c\u0631\u0627\u06cc \u062d\u062f \u0633\u0648\u062f \u06cc\u0627 \u062d\u062f \u0636\u0631\u0631 OCO \u062f\u0631 \u0635\u0631\u0627\u0641\u06cc \u0646\u0648\u0628\u06cc\u062a\u06a9\u0633"
+            }
+        ]
+    },
+    "VET/USDT": {
+        "signal": "BUY",
+        "entry_price": 866,
+        "target_price": 944,
+        "stop_price": 825,
+        "oco_order_id": null,
+        "updated_at": "1405-04-20 12:04:37",
+        "trade_history": []
+    },
+    "BASED/USDT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "1405-04-24 20:34:53",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-04-21 21:24:41",
+                "exit_time": "1405-04-24 20:34:53",
+                "entry_price": 18513,
+                "exit_price": 16717,
+                "reason": "Stop Loss (Paper)"
+            }
+        ]
+    },
+    "BTC/USDT": {
+        "signal": "BUY",
+        "entry_price": 12238108155,
+        "target_price": 12706396370,
+        "stop_price": 11967323005,
+        "oco_order_id": null,
+        "updated_at": "1405-04-24 20:38:55",
+        "trade_history": []
+    },
+    "ETH/USDT": {
+        "signal": "BUY",
+        "entry_price": 362415714,
+        "target_price": 392554186,
+        "stop_price": 346261401,
+        "oco_order_id": null,
+        "updated_at": "1405-04-24 20:39:00",
+        "trade_history": []
+    },
+    "AVAX/USDT": {
+        "signal": "BUY",
+        "entry_price": 1260876,
+        "target_price": 1315894,
+        "stop_price": 1229592,
+        "oco_order_id": null,
+        "updated_at": "1405-04-24 20:39:08",
+        "trade_history": []
+    },
+    "NEAR/USDT": {
+        "signal": "BUY",
+        "entry_price": 388034,
+        "target_price": 417699,
+        "stop_price": 372040,
+        "oco_order_id": null,
+        "updated_at": "1405-04-24 20:39:14",
+        "trade_history": []
+    },
+    "SOL/USDT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "1405-04-24 21:11:07",
+        "trade_history": []
+    },
+    "XRP/USDT": {
+        "signal": "BUY",
+        "entry_price": 209500,
+        "target_price": 219842,
+        "stop_price": 203701,
+        "oco_order_id": null,
+        "updated_at": "1405-04-24 21:11:18",
+        "trade_history": []
+    },
+    "ADA/USDT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "1405-04-24 21:11:07",
+        "trade_history": []
+    },
+    "DOGE/USDT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "1405-04-24 21:11:07",
+        "trade_history": []
+    },
+    "LINK/USDT": {
+        "signal": "BUY",
+        "entry_price": 1612218,
+        "target_price": 1765865,
+        "stop_price": 1530567,
+        "oco_order_id": null,
+        "updated_at": "1405-04-24 21:11:26",
+        "trade_history": []
+    },
+    "UNI/USDT": {
+        "signal": "BUY",
+        "entry_price": 686437,
+        "target_price": 737988,
+        "stop_price": 658606,
+        "oco_order_id": null,
+        "updated_at": "1405-04-24 21:11:32",
+        "trade_history": []
+    },
+    "LTC/USDT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "1405-04-24 21:11:07",
+        "trade_history": []
+    },
+    "BCH/USDT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "1405-04-24 21:11:07",
+        "trade_history": []
+    },
+    "ALGO/USDT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "1405-04-24 21:11:07",
+        "trade_history": []
+    },
+    "HBAR/USDT": {
+        "signal": "BUY",
+        "entry_price": 12720,
+        "target_price": 13508,
+        "stop_price": 12288,
+        "oco_order_id": null,
+        "updated_at": "1405-04-24 21:11:43",
+        "trade_history": []
+    }
+}
