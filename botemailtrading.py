@@ -300,106 +300,89 @@ def get_kucoin_data(symbol, timeframe, limit=300):
         return None
 
 
-###def calculate_ut_bot_2h_live(df, sensitivity=4, atr_period=14):
-    if len(df) < 25:
-        df['signal'] = 'HOLD'
-        return df
-
-    high_low = df['high'] - df['low']
-    high_close = (df['high'] - df['close'].shift()).abs()
-    low_close = (df['low'] - df['close'].shift()).abs()
-    ranges = pd.concat([high_low, high_close, low_close], axis=1)
-    df['ATR'] = ranges.max(axis=1).rolling(10).mean()
-
-    df['EMA_50'] = df['close'].ewm(span=50, adjust=False).mean()
-    df['RSI'] = ta.momentum.rsi(close=df['close'], window=14)
-
-    df['Local_Resistance'] = df['high'].shift(1).rolling(window=10).max()
-    df['Volume_MA'] = df['volume'].shift(1).rolling(window=20).mean()
-
-    df['signal'] = 'HOLD'
-
-    for i in range(21, len(df)):
-        current_price = df['close'].iloc[i]
-        resistance = df['Local_Resistance'].iloc[i]
-        current_volume = df['volume'].iloc[i]
-        v_ma = df['Volume_MA'].iloc[i]
-        rsi_val = df['RSI'].iloc[i]
-
-        is_breakout = current_price > resistance
-        is_volume_heavy = current_volume > (v_ma * 2.0)
-        is_not_overbought = rsi_val < 80
-
-        if is_breakout and is_volume_heavy and is_not_overbought:
-            df.at[df.index[i], 'signal'] = 'BUY'
-        elif current_price < df['low'].shift(1).rolling(window=5).min().iloc[i]:
-            df.at[df.index[i], 'signal'] = 'SELL'
-
-    return df###
-
 def calculate_ut_bot_2h_live(df, sensitivity=4, atr_period=14):
-    if len(df) < 60:
+    if len(df) < max(atr_period + 5, 50):
         df['signal'] = 'HOLD'
-        # برای جلوگیری از خطا در کدهای بعدی، ATR را حتی اگر کم بود مقداردهی کن
         df['ATR'] = 0.0
         return df
 
-    # اندیکاتورها
-    df['EMA20'] = ta.trend.ema_indicator(df['close'], window=20)
-    df['EMA50'] = ta.trend.ema_indicator(df['close'], window=50)
-    df['RSI'] = ta.momentum.rsi(close=df['close'], window=14)
-    df['Volume_MA'] = df['volume'].rolling(window=20).mean()
-
-    # اضافه کردن ATR که باعث ارور شده بود
+    # محاسبه ATR برای تعیین میزان نوسان و حد ضرر پویا
     df['ATR'] = ta.volatility.average_true_range(df['high'], df['low'], df['close'], window=atr_period)
 
-    df['EMA_Slope'] = df['EMA50'].diff()
-    df['signal'] = 'HOLD'
+    # محاسبه میانگین متحرک پایه (مثلا EMA 1 یا بر اساس Close به عنوان بیس Trailing Stop)
+    # در استراتژی‌های UT Bot معمولا از ATR Trailing Stop استفاده می‌شود
+    xATR = df['ATR'] * sensitivity
 
-    # حلقه تحلیل
-    for i in range(50, len(df)):
-        # استخراج مقادیر
-        current_price = df['close'].iloc[i]
-        current_volume = df['volume'].iloc[i]
-        v_ma = df['Volume_MA'].iloc[i]
-        rsi_val = df['RSI'].iloc[i]
-        ema20 = df['EMA20'].iloc[i]
-        ema50 = df['EMA50'].iloc[i]
-        ema_slope = df['EMA_Slope'].iloc[i]
+    # پیاده‌سازی منطق Trailing Stop مشابه اسکریپت‌های استاندارد چارت
+    nLoss = xATR
 
-        # تعریف وضعیت‌ها
-        is_uptrend = (current_price > ema20) and (ema20 > ema50)
-        is_rsi_healthy = (40 < rsi_val < 70)
-        is_high_volume = (current_volume > (v_ma * 0.4))
-        is_momentum_with_volume = (current_volume > (v_ma * 0.1)) and (current_price > df['high'].rolling(10).max().iloc[i])
-        is_volume_ok = is_high_volume or is_momentum_with_volume
-        is_slope_positive = (ema_slope > 0)
+    # محاسبه خط تریلینگ استاپ (Trailing Stop Line)
+    trailing_stop = [0.0] * len(df)
+    signals = ['HOLD'] * len(df)
 
-        # منطق واحد (به جای دو بار چک کردن)
-        if is_uptrend and is_rsi_healthy and is_volume_ok and is_slope_positive:
-            df.at[df.index[i], 'signal'] = 'BUY'
-        elif current_price < ema20:
-            df.at[df.index[i], 'signal'] = 'SELL'
+    close_prices = df['close'].values
+    high_prices = df['high'].values
+    low_prices = df['low'].values
+
+    for i in range(1, len(df)):
+        prev_ts = trailing_stop[i - 1]
+        curr_close = close_prices[i]
+        prev_close = close_prices[i - 1]
+        curr_loss = nLoss.iloc[i]
+
+        if curr_close > prev_ts and prev_close > prev_ts:
+            trailing_stop[i] = max(prev_ts, curr_close - curr_loss)
+        elif curr_close < prev_ts and prev_close < prev_ts:
+            trailing_stop[i] = min(prev_ts, curr_close + curr_loss)
+        elif curr_close > prev_ts:
+            trailing_stop[i] = curr_close - curr_loss
         else:
-            df.at[df.index[i], 'signal'] = 'HOLD'
+            trailing_stop[i] = curr_close + curr_loss
 
+        # بررسی سیگنال‌های خرید و فروش بر اساس کراس قیمت و خط استاپ (مشابه چارت)
+        # کراس به سمت بالا (سیگنال Buy)
+        if close_prices[i - 1] <= trailing_stop[i - 1] and curr_close > trailing_stop[i]:
+            signals[i] = 'BUY'
+        # کراس به سمت پایین (سیگنال Sell)
+        elif close_prices[i - 1] >= trailing_stop[i - 1] and curr_close < trailing_stop[i]:
+            signals[i] = 'SELL'
+        else:
+            signals[i] = 'HOLD'
+
+    df['TrailingStop'] = trailing_stop
+    df['signal'] = signals
+
+    # اندیکاتورهای کمکی برای فیلتر حجم و تاییدیه
+    df['Volume_MA'] = df['volume'].rolling(window=20).mean()
+    df['RSI'] = ta.momentum.rsi(close=df['close'], window=14)
 
     return df
 
 
-def estimate_target_time(entry_price, target_price, atr_value, timeframe_hours):
-    if atr_value <= 0:
-        return None
+def estimate_target_time(entry_price, target_price, df, timeframe_hours=1):
+    if entry_price <= 0 or target_price <= entry_price:
+        return 0, 0, 0
 
-    distance = abs(target_price - entry_price)
+    # محاسبه درصد سود مورد نیاز تا تارگت
+    required_profit_pct = (target_price - entry_price) / entry_price
 
-    candles = distance / atr_value
+    # محاسبه میانگین درصد رشد یا حرکتِ مثبتِ کندل‌ها در گذشته (به جای ATR مطلق)
+    df['price_change_pct'] = (df['close'] - df['open']).abs() / df['open']
+    avg_candle_movement_pct = df['price_change_pct'].tail(20).mean()
 
-    hours = candles * timeframe_hours
+    if avg_candle_movement_pct <= 0:
+        return 1, timeframe_hours, timeframe_hours / 24
 
+    # تخمین تعداد کندل‌های مورد نیاز بر اساس میانگین نوسان واقعی بازار
+    estimated_candles = required_profit_pct / avg_candle_movement_pct
+
+    # محدود کردن به حداقل ۱ کندل برای جلوگیری از عدد صفر
+    estimated_candles = max(1.0, estimated_candles)
+
+    hours = estimated_candles * timeframe_hours
     days = hours / 24
 
-    return candles, hours, days
+    return estimated_candles, hours, days
 
 
 def simulate_oco_trade(symbol, current_price, atr_value, dollar_price, df):
