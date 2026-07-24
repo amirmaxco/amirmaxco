@@ -19,8 +19,8 @@ now_shamsi=jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 # ==========================================
 PAPER_TRADING = True
 RISK_PERCENT = 2.0
-MAX_DAILY_TRADES = 10
-MAX_OPEN_POSITIONS = 10
+MAX_DAILY_TRADES = 6
+MAX_OPEN_POSITIONS = 6
 target_day=0
 # تعاریف وضعیت‌های ربات
 STATE_IDLE = "IDLE"
@@ -50,7 +50,7 @@ logger.addHandler(stream_handler)
 
 exchange = ccxt.kucoin({'enableRateLimit': True})
 timeframe = '1h'
-BUDGET_TOMAN = 300000
+BUDGET_TOMAN = 5000000
 
 SENDER_EMAIL = "amirghoorbaninia3002@gmail.com"
 SENDER_PASSWORD = "qcmg jxrc vxic mucu"
@@ -359,30 +359,22 @@ def calculate_ut_bot_2h_live(df, sensitivity=4, atr_period=14):
     return df
 
 
-def estimate_target_time(entry_price, target_price, df, timeframe_hours=1):
-    if entry_price <= 0 or target_price <= entry_price:
-        return 0, 0, 0
-
-    # محاسبه درصد سود مورد نیاز تا تارگت
-    required_profit_pct = (target_price - entry_price) / entry_price
-
-    # محاسبه میانگین درصد رشد یا حرکتِ مثبتِ کندل‌ها در گذشته (به جای ATR مطلق)
-    df['price_change_pct'] = (df['close'] - df['open']).abs() / df['open']
-    avg_candle_movement_pct = df['price_change_pct'].tail(20).mean()
-
-    if avg_candle_movement_pct <= 0:
+def estimate_target_time(entry_price, target_price, atr_value, timeframe_hours=1):
+    if entry_price <= 0 or target_price <= entry_price or atr_value <= 0:
         return 1, timeframe_hours, timeframe_hours / 24
 
-    # تخمین تعداد کندل‌های مورد نیاز بر اساس میانگین نوسان واقعی بازار
-    estimated_candles = required_profit_pct / avg_candle_movement_pct
+    # محاسبه فاصله تا تارگت بر اساس ATR یا نوسان
+    distance = abs(target_price - entry_price)
 
-    # محدود کردن به حداقل ۱ کندل برای جلوگیری از عدد صفر
+    # تخمین تعداد کندل‌ها بر اساس فاصله تقسیم بر اندازه نوسان (ATR)
+    estimated_candles = distance / atr_value
     estimated_candles = max(1.0, estimated_candles)
 
     hours = estimated_candles * timeframe_hours
     days = hours / 24
 
     return estimated_candles, hours, days
+
 
 
 def simulate_oco_trade(symbol, current_price, atr_value, dollar_price, df):
@@ -655,7 +647,7 @@ def monitor_market():
         "GRT/USDT", "STX/USDT", "ANKR/USDT", "HMSTR/USDT", "DOGS/USDT",
         "TNSR/USDT", "2Z/USDT", "RENDER/USDT", "APE/USDT", "DYDX/USDT",
         "BASED/USDT",
-        "ONE/USDT", "BICO/USDT"
+        "ONE/USDT", "BICO/USDT","NOT/USDT","KAITO/USDT","PUMP/USDT","BARD/USDT","PROM/USDT","LA/USDT","ZAMA/USDT"
     ]
 
     DB_FILE = "live_signals_v2.json"
