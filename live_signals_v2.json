@@ -1,19 +1,110 @@
 {
-    "ZIL/IRT": {
+    "BTC/IRT": {
+        "signal": "BUY",
+        "entry_price": 12329405201,
+        "target_price": 12968632966,
+        "stop_price": 11972876931,
+        "oco_order_id": null,
+        "updated_at": "1405-05-05 02:48:48",
+        "target_day": "0.7 \u0631\u0648\u0632 (15.8 \u0633\u0627\u0639\u062a / ~15.8 \u06a9\u0646\u062f\u0644)",
+        "trade_history": []
+    },
+    "ETH/IRT": {
         "signal": "HOLD",
         "entry_price": 0.0,
         "target_price": 0.0,
         "stop_price": 0.0,
         "oco_order_id": null,
-        "updated_at": "2026-07-07 22:49:22",
+        "updated_at": "1405-05-05 14:13:05",
+        "target_day": "0.5 \u0631\u0648\u0632 (12.7 \u0633\u0627\u0639\u062a / ~12.7 \u06a9\u0646\u062f\u0644)",
         "trade_history": [
             {
                 "type": "PAPER_TRADE",
-                "entry_time": "2026-07-07 19:18:22",
-                "exit_time": "2026-07-07 22:49:22",
-                "entry_price": 542,
-                "exit_price": 531,
-                "reason": "\u0644\u0645\u0633 \u062d\u062f \u0636\u0631\u0631 \u06cc\u0627 \u0633\u06cc\u06af\u0646\u0627\u0644 \u0627\u0646\u062f\u06cc\u06a9\u0627\u062a\u0648\u0631 (\u062a\u0633\u062a \u0641\u0631\u0636\u06cc)"
+                "entry_time": "1405-05-04 15:04:43",
+                "exit_time": "1405-05-05 14:13:05",
+                "entry_price": 357714000,
+                "target_day": "0.5 \u0631\u0648\u0632 (12.7 \u0633\u0627\u0639\u062a / ~12.7 \u06a9\u0646\u062f\u0644)",
+                "exit_price": 373000000,
+                "reason": "Take Profit (Paper)"
+            }
+        ]
+    },
+    "SOL/IRT": {
+        "signal": "BUY",
+        "entry_price": 13842796,
+        "target_price": 14548192,
+        "stop_price": 13448652,
+        "oco_order_id": null,
+        "updated_at": "1405-05-16 20:03:06",
+        "target_day": "0.4 \u0631\u0648\u0632 (9.0 \u0633\u0627\u0639\u062a / ~9.0 \u06a9\u0646\u062f\u0644)",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-12 19:02:16",
+                "exit_time": "1405-05-15 13:47:02",
+                "entry_price": 14161406,
+                "exit_price": 13661514,
+                "target_day": "0.4 \u0631\u0648\u0632 (10.7 \u0633\u0627\u0639\u062a / ~10.7 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            }
+        ]
+    },
+    "AVAX/IRT": {
+        "signal": "BUY",
+        "entry_price": 1222440,
+        "target_price": 1323081,
+        "stop_price": 1168459,
+        "oco_order_id": null,
+        "updated_at": "1405-05-17 06:26:29",
+        "target_day": "0.7 \u0631\u0648\u0632 (16.4 \u0633\u0627\u0639\u062a / ~16.4 \u06a9\u0646\u062f\u0644)",
+        "trade_history": []
+    },
+    "NEAR/IRT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "1405-05-16 19:23:30",
+        "target_day": "0.2 \u0631\u0648\u0632 (6.0 \u0633\u0627\u0639\u062a / ~6.0 \u06a9\u0646\u062f\u0644)",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-05 03:03:09",
+                "exit_time": "1405-05-05 21:56:59",
+                "entry_price": 346891,
+                "exit_price": 335333,
+                "target_day": "0.3 \u0631\u0648\u0632 (7.2 \u0633\u0627\u0639\u062a / ~7.2 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-15 13:17:46",
+                "exit_time": "1405-05-16 19:23:30",
+                "entry_price": 314629,
+                "exit_price": 303001,
+                "target_day": "0.2 \u0631\u0648\u0632 (6.0 \u0633\u0627\u0639\u062a / ~6.0 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            }
+        ]
+    },
+    "SUI/IRT": {
+        "signal": "BUY",
+        "entry_price": 129461,
+        "target_price": 140989,
+        "stop_price": 123309,
+        "oco_order_id": null,
+        "updated_at": "1405-05-17 13:08:48",
+        "target_day": "0.5 \u0631\u0648\u0632 (13.0 \u0633\u0627\u0639\u062a / ~13.0 \u06a9\u0646\u062f\u0644)",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-08 20:04:27",
+                "exit_time": "1405-05-15 13:17:59",
+                "entry_price": 135271,
+                "exit_price": 127778,
+                "target_day": "0.6 \u0631\u0648\u0632 (13.3 \u0633\u0627\u0639\u062a / ~13.3 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
             }
         ]
     },
@@ -23,165 +114,146 @@
         "target_price": 0.0,
         "stop_price": 0.0,
         "oco_order_id": null,
-        "updated_at": "2026-07-08 10:48:36",
+        "updated_at": "1405-05-16 23:39:16",
+        "target_day": "0.3 \u0631\u0648\u0632 (6.0 \u0633\u0627\u0639\u062a / ~6.0 \u06a9\u0646\u062f\u0644)",
         "trade_history": [
             {
                 "type": "PAPER_TRADE",
-                "entry_time": "2026-07-07 19:18:30",
-                "exit_time": "2026-07-08 10:48:36",
-                "entry_price": 58463,
-                "exit_price": 58790,
-                "reason": "\u0644\u0645\u0633 \u062d\u062f \u0636\u0631\u0631 \u06cc\u0627 \u0633\u06cc\u06af\u0646\u0627\u0644 \u0627\u0646\u062f\u06cc\u06a9\u0627\u062a\u0648\u0631 (\u062a\u0633\u062a \u0641\u0631\u0636\u06cc)"
+                "entry_time": "1405-05-13 22:11:28",
+                "exit_time": "1405-05-16 23:39:16",
+                "entry_price": 62628,
+                "exit_price": 61111,
+                "target_day": "0.3 \u0631\u0648\u0632 (6.0 \u0633\u0627\u0639\u062a / ~6.0 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
             }
         ]
     },
-    "SAND/IRT": {
+    "XRP/IRT": {
         "signal": "HOLD",
         "entry_price": 0.0,
         "target_price": 0.0,
         "stop_price": 0.0,
         "oco_order_id": null,
-        "updated_at": "2026-07-07 21:45:03",
+        "updated_at": "1405-05-14 17:08:56",
+        "target_day": "0.6 \u0631\u0648\u0632 (14.0 \u0633\u0627\u0639\u062a / ~14.0 \u06a9\u0646\u062f\u0644)",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-07 09:07:55",
+                "exit_time": "1405-05-14 17:08:56",
+                "entry_price": 209777,
+                "exit_price": 198024,
+                "target_day": "0.6 \u0631\u0648\u0632 (14.0 \u0633\u0627\u0639\u062a / ~14.0 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            }
+        ]
+    },
+    "ADA/IRT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "1405-05-02 15:26:28",
+        "target_day": 0.0,
         "trade_history": []
     },
-    "JASMY/IRT": {
-        "signal": "HOLD",
-        "entry_price": 0.0,
-        "target_price": 0.0,
-        "stop_price": 0.0,
-        "oco_order_id": null,
-        "updated_at": "2026-07-07 22:49:29",
-        "trade_history": [
-            {
-                "type": "PAPER_TRADE",
-                "entry_time": "2026-07-07 20:11:56",
-                "exit_time": "2026-07-07 22:49:29",
-                "entry_price": 814,
-                "exit_price": 779,
-                "reason": "\u0644\u0645\u0633 \u062d\u062f \u0636\u0631\u0631 \u06cc\u0627 \u0633\u06cc\u06af\u0646\u0627\u0644 \u0627\u0646\u062f\u06cc\u06a9\u0627\u062a\u0648\u0631 (\u062a\u0633\u062a \u0641\u0631\u0636\u06cc)"
-            }
-        ]
-    },
-    "SUI/IRT": {
-        "signal": "HOLD",
-        "entry_price": 0.0,
-        "target_price": 0.0,
-        "stop_price": 0.0,
-        "oco_order_id": null,
-        "updated_at": "2026-07-08 14:48:27",
-        "trade_history": [
-            {
-                "type": "PAPER_TRADE",
-                "entry_time": "2026-07-07 20:12:07",
-                "exit_time": "2026-07-08 14:48:27",
-                "entry_price": 131176,
-                "exit_price": 126959,
-                "reason": "\u062d\u062f \u0636\u0631\u0631 \u06cc\u0627 \u0633\u06cc\u06af\u0646\u0627\u0644 \u0645\u0639\u06a9\u0648\u0633"
-            }
-        ]
-    },
-    "APE/IRT": {
+    "DOGE/IRT": {
         "signal": "BUY",
-        "entry_price": 26848,
-        "target_price": 31079,
-        "stop_price": 24652,
+        "entry_price": 13106,
+        "target_price": 13637,
+        "stop_price": 12801,
         "oco_order_id": null,
-        "updated_at": "2026-07-08 14:49:01",
+        "updated_at": "1405-05-17 10:03:00",
+        "target_day": "0.4 \u0631\u0648\u0632 (9.7 \u0633\u0627\u0639\u062a / ~9.7 \u06a9\u0646\u062f\u0644)",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-11 09:12:13",
+                "exit_time": "1405-05-15 13:47:24",
+                "entry_price": 13564,
+                "exit_price": 12855,
+                "target_day": "0.6 \u0631\u0648\u0632 (15.0 \u0633\u0627\u0639\u062a / ~15.0 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            }
+        ]
+    },
+    "LINK/IRT": {
+        "signal": "BUY",
+        "entry_price": 1545148,
+        "target_price": 1623287,
+        "stop_price": 1501452,
+        "oco_order_id": null,
+        "updated_at": "1405-05-16 13:07:37",
+        "target_day": "0.5 \u0631\u0648\u0632 (10.9 \u0633\u0627\u0639\u062a / ~10.9 \u06a9\u0646\u062f\u0644)",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-03 17:04:07",
+                "exit_time": "1405-05-05 02:49:04",
+                "entry_price": 1586933,
+                "target_day": "0.4 \u0631\u0648\u0632 (10.7 \u0633\u0627\u0639\u062a / ~10.7 \u06a9\u0646\u062f\u0644)",
+                "exit_price": 1660000,
+                "reason": "Take Profit (Paper)"
+            }
+        ]
+    },
+    "UNI/IRT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "1405-05-08 17:33:58",
+        "target_day": "0.5 \u0631\u0648\u0632 (12.7 \u0633\u0627\u0639\u062a / ~12.7 \u06a9\u0646\u062f\u0644)",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-02 19:02:26",
+                "exit_time": "1405-05-03 08:50:07",
+                "entry_price": 738023,
+                "exit_price": 700126,
+                "target_day": "0.3 \u0631\u0648\u0632 (8.3 \u0633\u0627\u0639\u062a / ~8.3 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-06 16:02:31",
+                "exit_time": "1405-05-08 17:33:58",
+                "entry_price": 738388,
+                "target_day": "0.5 \u0631\u0648\u0632 (12.7 \u0633\u0627\u0639\u062a / ~12.7 \u06a9\u0646\u062f\u0644)",
+                "exit_price": 829000,
+                "reason": "Take Profit (Paper)"
+            }
+        ]
+    },
+    "LTC/IRT": {
+        "signal": "BUY",
+        "entry_price": 8543843,
+        "target_price": 9021130,
+        "stop_price": 8279619,
+        "oco_order_id": null,
+        "updated_at": "1405-05-14 01:05:15",
+        "target_day": "0.4 \u0631\u0648\u0632 (8.6 \u0633\u0627\u0639\u062a / ~8.6 \u06a9\u0646\u062f\u0644)",
         "trade_history": []
     },
-    "DYDX/IRT": {
-        "signal": "HOLD",
-        "entry_price": 0.0,
-        "target_price": 0.0,
-        "stop_price": 0.0,
+    "BCH/IRT": {
+        "signal": "BUY",
+        "entry_price": 40200240,
+        "target_price": 41740145,
+        "stop_price": 39309927,
         "oco_order_id": null,
-        "updated_at": "1405-04-19 22:02:13",
-        "trade_history": [
-            {
-                "type": "REAL_OCO_TRADE",
-                "entry_time": "2026-07-08 22:35:41",
-                "exit_time": "1405-04-19 22:02:13",
-                "entry_price": 24586,
-                "exit_price": 23222,
-                "reason": "\u0627\u062c\u0631\u0627\u06cc \u062d\u062f \u0633\u0648\u062f \u06cc\u0627 \u062d\u062f \u0636\u0631\u0631 OCO \u062f\u0631 \u0635\u0631\u0627\u0641\u06cc \u0646\u0648\u0628\u06cc\u062a\u06a9\u0633"
-            }
-        ]
-    },
-    "BICO/IRT": {
-        "signal": "HOLD",
-        "entry_price": 0.0,
-        "target_price": 0.0,
-        "stop_price": 0.0,
-        "oco_order_id": null,
-        "updated_at": "1405-04-21 22:25:30",
+        "updated_at": "1405-05-14 14:05:56",
+        "target_day": "0.5 \u0631\u0648\u0632 (13.0 \u0633\u0627\u0639\u062a / ~13.0 \u06a9\u0646\u062f\u0644)",
         "trade_history": [
             {
                 "type": "PAPER_TRADE",
-                "entry_time": "1405-04-18 15:30:47",
-                "exit_time": "1405-04-19 20:46:50",
-                "entry_price": 2510,
-                "exit_price": 2735,
-                "reason": "Take Profit (Paper)"
-            },
-            {
-                "type": "REAL_OCO_TRADE",
-                "entry_time": "1405-04-19 20:46:50",
-                "exit_time": "1405-04-20 00:06:46",
-                "entry_price": 0,
-                "exit_price": 0,
-                "reason": "\u0627\u062c\u0631\u0627\u06cc \u062d\u062f \u0633\u0648\u062f \u06cc\u0627 \u062d\u062f \u0636\u0631\u0631 OCO \u062f\u0631 \u0635\u0631\u0627\u0641\u06cc \u0646\u0648\u0628\u06cc\u062a\u06a9\u0633"
-            },
-            {
-                "type": "PAPER_TRADE",
-                "entry_time": "1405-04-20 00:06:46",
-                "exit_time": "1405-04-21 22:25:30",
-                "entry_price": 2796.2974,
-                "exit_price": 2455,
+                "entry_time": "1405-05-02 19:02:51",
+                "exit_time": "1405-05-03 23:24:23",
+                "entry_price": 40538070,
+                "exit_price": 39440388,
+                "target_day": "0.3 \u0631\u0648\u0632 (7.9 \u0633\u0627\u0639\u062a / ~7.9 \u06a9\u0646\u062f\u0644)",
                 "reason": "Stop Loss (Paper)"
-            }
-        ]
-    },
-    "TNSR/IRT": {
-        "signal": "HOLD",
-        "entry_price": 0.0,
-        "target_price": 0.0,
-        "stop_price": 0.0,
-        "oco_order_id": null,
-        "updated_at": "1405-04-24 20:34:46",
-        "trade_history": [
-            {
-                "type": "PAPER_TRADE",
-                "entry_time": "1405-04-18 15:53:43",
-                "exit_time": "1405-04-18 23:38:40",
-                "entry_price": 6114,
-                "exit_price": 5866,
-                "reason": "Stop Loss (Paper)"
-            },
-            {
-                "type": "PAPER_TRADE",
-                "entry_time": "1405-04-22 10:59:48",
-                "exit_time": "1405-04-24 20:34:46",
-                "entry_price": 5661,
-                "exit_price": 6221,
-                "reason": "Take Profit (Paper)"
-            }
-        ]
-    },
-    "XLM/IRT": {
-        "signal": "HOLD",
-        "entry_price": 0.0,
-        "target_price": 0.0,
-        "stop_price": 0.0,
-        "oco_order_id": null,
-        "updated_at": "1405-04-19 22:01:59",
-        "trade_history": [
-            {
-                "type": "REAL_OCO_TRADE",
-                "entry_time": "1405-04-18 22:30:38",
-                "exit_time": "1405-04-19 22:01:59",
-                "entry_price": 33638,
-                "exit_price": 33968,
-                "reason": "\u0627\u062c\u0631\u0627\u06cc \u062d\u062f \u0633\u0648\u062f \u06cc\u0627 \u062d\u062f \u0636\u0631\u0631 OCO \u062f\u0631 \u0635\u0631\u0627\u0641\u06cc \u0646\u0648\u0628\u06cc\u062a\u06a9\u0633"
             }
         ]
     },
@@ -191,160 +263,19 @@
         "target_price": 0.0,
         "stop_price": 0.0,
         "oco_order_id": null,
-        "updated_at": "1405-04-19 23:14:13",
-        "trade_history": [
-            {
-                "type": "REAL_OCO_TRADE",
-                "entry_time": "1405-04-19 21:31:25",
-                "exit_time": "1405-04-19 22:01:56",
-                "entry_price": 14252,
-                "exit_price": 14168,
-                "reason": "\u0627\u062c\u0631\u0627\u06cc \u062d\u062f \u0633\u0648\u062f \u06cc\u0627 \u062d\u062f \u0636\u0631\u0631 OCO \u062f\u0631 \u0635\u0631\u0627\u0641\u06cc \u0646\u0648\u0628\u06cc\u062a\u06a9\u0633"
-            },
-            {
-                "type": "REAL_OCO_TRADE",
-                "entry_time": "1405-04-19 22:01:56",
-                "exit_time": "1405-04-19 23:14:13",
-                "entry_price": 14161,
-                "exit_price": 14256,
-                "reason": "\u0627\u062c\u0631\u0627\u06cc \u062d\u062f \u0633\u0648\u062f \u06cc\u0627 \u062d\u062f \u0636\u0631\u0631 OCO \u062f\u0631 \u0635\u0631\u0627\u0641\u06cc \u0646\u0648\u0628\u06cc\u062a\u06a9\u0633"
-            }
-        ]
-    },
-    "VET/IRT": {
-        "signal": "BUY",
-        "entry_price": 866,
-        "target_price": 944,
-        "stop_price": 825,
-        "oco_order_id": null,
-        "updated_at": "1405-04-20 12:04:37",
-        "trade_history": []
-    },
-    "BASED/IRT": {
-        "signal": "HOLD",
-        "entry_price": 0.0,
-        "target_price": 0.0,
-        "stop_price": 0.0,
-        "oco_order_id": null,
-        "updated_at": "1405-04-24 20:34:53",
+        "updated_at": "1405-05-08 17:44:03",
+        "target_day": "0.4 \u0631\u0648\u0632 (10.0 \u0633\u0627\u0639\u062a / ~10.0 \u06a9\u0646\u062f\u0644)",
         "trade_history": [
             {
                 "type": "PAPER_TRADE",
-                "entry_time": "1405-04-21 21:24:41",
-                "exit_time": "1405-04-24 20:34:53",
-                "entry_price": 18513,
-                "exit_price": 16717,
+                "entry_time": "1405-05-06 00:02:35",
+                "exit_time": "1405-05-08 17:44:03",
+                "entry_price": 14221,
+                "exit_price": 13664,
+                "target_day": "0.4 \u0631\u0648\u0632 (10.0 \u0633\u0627\u0639\u062a / ~10.0 \u06a9\u0646\u062f\u0644)",
                 "reason": "Stop Loss (Paper)"
             }
         ]
-    },
-    "BTC/IRT": {
-        "signal": "BUY",
-        "entry_price": 12238108155,
-        "target_price": 12706396370,
-        "stop_price": 11967323005,
-        "oco_order_id": null,
-        "updated_at": "1405-04-24 20:38:55",
-        "trade_history": []
-    },
-    "ETH/IRT": {
-        "signal": "BUY",
-        "entry_price": 362415714,
-        "target_price": 392554186,
-        "stop_price": 346261401,
-        "oco_order_id": null,
-        "updated_at": "1405-04-24 20:39:00",
-        "trade_history": []
-    },
-    "AVAX/IRT": {
-        "signal": "BUY",
-        "entry_price": 1260876,
-        "target_price": 1315894,
-        "stop_price": 1229592,
-        "oco_order_id": null,
-        "updated_at": "1405-04-24 20:39:08",
-        "trade_history": []
-    },
-    "NEAR/IRT": {
-        "signal": "BUY",
-        "entry_price": 388034,
-        "target_price": 417699,
-        "stop_price": 372040,
-        "oco_order_id": null,
-        "updated_at": "1405-04-24 20:39:14",
-        "trade_history": []
-    },
-    "SOL/IRT": {
-        "signal": "HOLD",
-        "entry_price": 0.0,
-        "target_price": 0.0,
-        "stop_price": 0.0,
-        "oco_order_id": null,
-        "updated_at": "1405-04-24 21:11:07",
-        "trade_history": []
-    },
-    "XRP/IRT": {
-        "signal": "BUY",
-        "entry_price": 209500,
-        "target_price": 219842,
-        "stop_price": 203701,
-        "oco_order_id": null,
-        "updated_at": "1405-04-24 21:11:18",
-        "trade_history": []
-    },
-    "ADA/IRT": {
-        "signal": "HOLD",
-        "entry_price": 0.0,
-        "target_price": 0.0,
-        "stop_price": 0.0,
-        "oco_order_id": null,
-        "updated_at": "1405-04-24 21:11:07",
-        "trade_history": []
-    },
-    "DOGE/IRT": {
-        "signal": "HOLD",
-        "entry_price": 0.0,
-        "target_price": 0.0,
-        "stop_price": 0.0,
-        "oco_order_id": null,
-        "updated_at": "1405-04-24 21:11:07",
-        "trade_history": []
-    },
-    "LINK/IRT": {
-        "signal": "BUY",
-        "entry_price": 1612218,
-        "target_price": 1765865,
-        "stop_price": 1530567,
-        "oco_order_id": null,
-        "updated_at": "1405-04-24 21:11:26",
-        "trade_history": []
-    },
-    "UNI/IRT": {
-        "signal": "BUY",
-        "entry_price": 686437,
-        "target_price": 737988,
-        "stop_price": 658606,
-        "oco_order_id": null,
-        "updated_at": "1405-04-24 21:11:32",
-        "trade_history": []
-    },
-    "LTC/IRT": {
-        "signal": "HOLD",
-        "entry_price": 0.0,
-        "target_price": 0.0,
-        "stop_price": 0.0,
-        "oco_order_id": null,
-        "updated_at": "1405-04-24 21:11:07",
-        "trade_history": []
-    },
-    "BCH/IRT": {
-        "signal": "HOLD",
-        "entry_price": 0.0,
-        "target_price": 0.0,
-        "stop_price": 0.0,
-        "oco_order_id": null,
-        "updated_at": "1405-04-24 21:11:07",
-        "trade_history": []
     },
     "ALGO/IRT": {
         "signal": "HOLD",
@@ -352,16 +283,633 @@
         "target_price": 0.0,
         "stop_price": 0.0,
         "oco_order_id": null,
-        "updated_at": "1405-04-24 21:11:07",
-        "trade_history": []
+        "updated_at": "1405-05-15 09:44:05",
+        "target_day": "0.3 \u0631\u0648\u0632 (6.6 \u0633\u0627\u0639\u062a / ~6.6 \u06a9\u0646\u062f\u0644)",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-02 19:03:18",
+                "exit_time": "1405-05-04 18:08:15",
+                "entry_price": 16209,
+                "exit_price": 15621,
+                "target_day": "0.5 \u0631\u0648\u0632 (11.7 \u0633\u0627\u0639\u062a / ~11.7 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-06 20:03:12",
+                "exit_time": "1405-05-07 22:01:42",
+                "entry_price": 15420,
+                "exit_price": 14980,
+                "target_day": "0.8 \u0631\u0648\u0632 (18.8 \u0633\u0627\u0639\u062a / ~18.8 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-10 00:18:37",
+                "exit_time": "1405-05-11 20:36:42",
+                "entry_price": 15336,
+                "target_day": "0.5 \u0631\u0648\u0632 (12.4 \u0633\u0627\u0639\u062a / ~12.4 \u06a9\u0646\u062f\u0644)",
+                "exit_price": 16496,
+                "reason": "Take Profit (Paper)"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-14 22:21:36",
+                "exit_time": "1405-05-15 09:44:05",
+                "entry_price": 16784,
+                "exit_price": 16275,
+                "target_day": "0.3 \u0631\u0648\u0632 (6.6 \u0633\u0627\u0639\u062a / ~6.6 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            }
+        ]
+    },
+    "XLM/IRT": {
+        "signal": "BUY",
+        "entry_price": 30368,
+        "target_price": 32234,
+        "stop_price": 29344,
+        "oco_order_id": null,
+        "updated_at": "1405-05-17 09:03:06",
+        "target_day": "0.5 \u0631\u0648\u0632 (11.7 \u0633\u0627\u0639\u062a / ~11.7 \u06a9\u0646\u062f\u0644)",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-04 19:02:11",
+                "exit_time": "1405-05-06 08:52:25",
+                "entry_price": 33552,
+                "exit_price": 31487,
+                "target_day": "0.6 \u0631\u0648\u0632 (13.8 \u0633\u0627\u0639\u062a / ~13.8 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            }
+        ]
     },
     "HBAR/IRT": {
         "signal": "BUY",
-        "entry_price": 12720,
-        "target_price": 13508,
-        "stop_price": 12288,
+        "entry_price": 12829,
+        "target_price": 13422,
+        "stop_price": 12494,
         "oco_order_id": null,
-        "updated_at": "1405-04-24 21:11:43",
+        "updated_at": "1405-05-17 16:01:58",
+        "target_day": "0.9 \u0631\u0648\u0632 (21.8 \u0633\u0627\u0639\u062a / ~21.8 \u06a9\u0646\u062f\u0644)",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-03 00:00:57",
+                "exit_time": "1405-05-03 11:17:12",
+                "entry_price": 13855,
+                "exit_price": 13243,
+                "target_day": "0.4 \u0631\u0648\u0632 (9.4 \u0633\u0627\u0639\u062a / ~9.4 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-07 23:06:25",
+                "exit_time": "1405-05-16 19:23:46",
+                "entry_price": 13203,
+                "exit_price": 12650,
+                "target_day": "0.5 \u0631\u0648\u0632 (12.3 \u0633\u0627\u0639\u062a / ~12.3 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            }
+        ]
+    },
+    "GRT/IRT": {
+        "signal": "BUY",
+        "entry_price": 2681,
+        "target_price": 2792,
+        "stop_price": 2617,
+        "oco_order_id": null,
+        "updated_at": "1405-05-17 11:02:28",
+        "target_day": "0.8 \u0631\u0648\u0632 (19.9 \u0633\u0627\u0639\u062a / ~19.9 \u06a9\u0646\u062f\u0644)",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-03 17:04:21",
+                "exit_time": "1405-05-05 19:09:27",
+                "entry_price": 3018,
+                "exit_price": 2916,
+                "target_day": "0.8 \u0631\u0648\u0632 (19.9 \u0633\u0627\u0639\u062a / ~19.9 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-10 21:15:20",
+                "exit_time": "1405-05-14 17:15:56",
+                "entry_price": 2791,
+                "exit_price": 2695,
+                "target_day": "1.2 \u0631\u0648\u0632 (28.7 \u0633\u0627\u0639\u062a / ~28.7 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-14 22:21:45",
+                "exit_time": "1405-05-16 16:09:55",
+                "entry_price": 2781,
+                "exit_price": 2691,
+                "target_day": "0.5 \u0631\u0648\u0632 (12.7 \u0633\u0627\u0639\u062a / ~12.7 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            }
+        ]
+    },
+    "ANKR/IRT": {
+        "signal": "BUY",
+        "entry_price": 673,
+        "target_price": 730,
+        "stop_price": 642,
+        "oco_order_id": null,
+        "updated_at": "1405-05-18 07:33:57",
+        "target_day": "1.6 \u0631\u0648\u0632 (38.6 \u0633\u0627\u0639\u062a / ~38.6 \u06a9\u0646\u062f\u0644)",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-05 19:09:31",
+                "exit_time": "1405-05-06 03:52:03",
+                "entry_price": 656,
+                "exit_price": 633,
+                "target_day": "1.3 \u0631\u0648\u0632 (32.1 \u0633\u0627\u0639\u062a / ~32.1 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-06 22:43:35",
+                "exit_time": "1405-05-07 06:59:39",
+                "entry_price": 644,
+                "target_day": "0.3 \u0631\u0648\u0632 (7.5 \u0633\u0627\u0639\u062a / ~7.5 \u06a9\u0646\u062f\u0644)",
+                "exit_price": 668,
+                "reason": "Take Profit (Paper)"
+            }
+        ]
+    },
+    "HMSTR/IRT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "1405-05-18 16:21:31",
+        "target_day": "0.4 \u0631\u0648\u0632 (8.6 \u0633\u0627\u0639\u062a / ~8.6 \u06a9\u0646\u062f\u0644)",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-14 17:16:02",
+                "exit_time": "1405-05-14 22:52:09",
+                "entry_price": 33,
+                "target_day": "0.4 \u0631\u0648\u0632 (9.0 \u0633\u0627\u0639\u062a / ~9.0 \u06a9\u0646\u062f\u0644)",
+                "exit_price": 36,
+                "reason": "Take Profit (Paper)"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-17 00:04:40",
+                "exit_time": "1405-05-18 16:21:31",
+                "entry_price": 37,
+                "target_day": "0.4 \u0631\u0648\u0632 (8.6 \u0633\u0627\u0639\u062a / ~8.6 \u06a9\u0646\u062f\u0644)",
+                "exit_price": 39,
+                "reason": "Take Profit (Paper)"
+            }
+        ]
+    },
+    "DOGS/IRT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "1405-05-02 15:26:28",
+        "target_day": 0.0,
+        "trade_history": []
+    },
+    "TNSR/IRT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "1405-05-16 11:40:33",
+        "target_day": "0.6 \u0631\u0648\u0632 (15.1 \u0633\u0627\u0639\u062a / ~15.1 \u06a9\u0646\u062f\u0644)",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-03 11:01:52",
+                "exit_time": "1405-05-03 23:31:32",
+                "entry_price": 6679,
+                "exit_price": 6065,
+                "target_day": "0.3 \u0631\u0648\u0632 (7.6 \u0633\u0627\u0639\u062a / ~7.6 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-12 09:06:46",
+                "exit_time": "1405-05-16 11:40:33",
+                "entry_price": 5724,
+                "target_day": "0.6 \u0631\u0648\u0632 (15.1 \u0633\u0627\u0639\u062a / ~15.1 \u06a9\u0646\u062f\u0644)",
+                "exit_price": 6031,
+                "reason": "Take Profit (Paper)"
+            }
+        ]
+    },
+    "2Z/IRT": {
+        "signal": "BUY",
+        "entry_price": 10371,
+        "target_price": 11278,
+        "stop_price": 9887,
+        "oco_order_id": null,
+        "updated_at": "1405-05-13 22:19:46",
+        "target_day": "1.5 \u0631\u0648\u0632 (35.3 \u0633\u0627\u0639\u062a / ~35.3 \u06a9\u0646\u062f\u0644)",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-02 23:38:07",
+                "exit_time": "1405-05-05 22:44:09",
+                "entry_price": 11608,
+                "exit_price": 11206,
+                "target_day": "0.6 \u0631\u0648\u0632 (13.5 \u0633\u0627\u0639\u062a / ~13.5 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-08 11:47:21",
+                "exit_time": "1405-05-12 11:56:28",
+                "entry_price": 10906,
+                "exit_price": 10300,
+                "target_day": "0.6 \u0631\u0648\u0632 (13.4 \u0633\u0627\u0639\u062a / ~13.4 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            }
+        ]
+    },
+    "RENDER/IRT": {
+        "signal": "BUY",
+        "entry_price": 249003,
+        "target_price": 261210,
+        "stop_price": 242153,
+        "oco_order_id": null,
+        "updated_at": "1405-05-15 11:33:52",
+        "target_day": "0.5 \u0631\u0648\u0632 (13.0 \u0633\u0627\u0639\u062a / ~13.0 \u06a9\u0646\u062f\u0644)",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-04 03:03:00",
+                "exit_time": "1405-05-13 17:37:03",
+                "entry_price": 274651,
+                "exit_price": 255110,
+                "target_day": "0.5 \u0631\u0648\u0632 (12.8 \u0633\u0627\u0639\u062a / ~12.8 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            }
+        ]
+    },
+    "APE/IRT": {
+        "signal": "BUY",
+        "entry_price": 24807,
+        "target_price": 25806,
+        "stop_price": 24233,
+        "oco_order_id": null,
+        "updated_at": "1405-05-17 14:04:33",
+        "target_day": "0.6 \u0631\u0648\u0632 (15.3 \u0633\u0627\u0639\u062a / ~15.3 \u06a9\u0646\u062f\u0644)",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-05 09:47:36",
+                "exit_time": "1405-05-08 11:37:52",
+                "entry_price": 28532,
+                "exit_price": 26383,
+                "target_day": "1.1 \u0631\u0648\u0632 (26.7 \u0633\u0627\u0639\u062a / ~26.7 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-14 19:03:13",
+                "exit_time": "1405-05-17 09:20:43",
+                "entry_price": 25327,
+                "exit_price": 24345,
+                "target_day": "1.1 \u0631\u0648\u0632 (25.3 \u0633\u0627\u0639\u062a / ~25.3 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            }
+        ]
+    },
+    "DYDX/IRT": {
+        "signal": "BUY",
+        "entry_price": 21378,
+        "target_price": 23136,
+        "stop_price": 20435,
+        "oco_order_id": null,
+        "updated_at": "1405-05-12 15:01:47",
+        "target_day": "0.4 \u0631\u0648\u0632 (10.1 \u0633\u0627\u0639\u062a / ~10.1 \u06a9\u0646\u062f\u0644)",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-02 16:05:24",
+                "exit_time": "1405-05-03 08:50:54",
+                "entry_price": 24769,
+                "exit_price": 23400,
+                "target_day": "0.4 \u0631\u0648\u0632 (10.2 \u0633\u0627\u0639\u062a / ~10.2 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            }
+        ]
+    },
+    "BASED/IRT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "1405-05-18 12:42:21",
+        "target_day": "0.4 \u0631\u0648\u0632 (10.4 \u0633\u0627\u0639\u062a / ~10.4 \u06a9\u0646\u062f\u0644)",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-02 19:03:55",
+                "exit_time": "1405-05-03 16:07:48",
+                "entry_price": 15254,
+                "target_day": "0.4 \u0631\u0648\u0632 (10.3 \u0633\u0627\u0639\u062a / ~10.3 \u06a9\u0646\u062f\u0644)",
+                "exit_price": 16417,
+                "reason": "Take Profit (Paper)"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-05 16:12:47",
+                "exit_time": "1405-05-10 22:02:07",
+                "entry_price": 15628,
+                "exit_price": 14500,
+                "target_day": "0.5 \u0631\u0648\u0632 (13.1 \u0633\u0627\u0639\u062a / ~13.1 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-11 23:03:14",
+                "exit_time": "1405-05-15 23:18:12",
+                "entry_price": 14657,
+                "target_day": "0.6 \u0631\u0648\u0632 (15.5 \u0633\u0627\u0639\u062a / ~15.5 \u06a9\u0646\u062f\u0644)",
+                "exit_price": 16197,
+                "reason": "Take Profit (Paper)"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-17 03:12:14",
+                "exit_time": "1405-05-18 12:42:21",
+                "entry_price": 14544,
+                "exit_price": 13831,
+                "target_day": "0.4 \u0631\u0648\u0632 (10.4 \u0633\u0627\u0639\u062a / ~10.4 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            }
+        ]
+    },
+    "ONE/IRT": {
+        "signal": "BUY",
+        "entry_price": 237,
+        "target_price": 265,
+        "stop_price": 222,
+        "oco_order_id": null,
+        "updated_at": "1405-05-06 00:03:21",
+        "target_day": "0.5 \u0631\u0648\u0632 (11.0 \u0633\u0627\u0639\u062a / ~11.0 \u06a9\u0646\u062f\u0644)",
+        "trade_history": []
+    },
+    "BICO/IRT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "1405-05-15 17:02:59",
+        "target_day": "0.5 \u0631\u0648\u0632 (11.5 \u0633\u0627\u0639\u062a / ~11.5 \u06a9\u0646\u062f\u0644)",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-05 21:02:03",
+                "exit_time": "1405-05-06 03:52:15",
+                "entry_price": 2513,
+                "exit_price": 2328,
+                "target_day": "0.4 \u0631\u0648\u0632 (10.1 \u0633\u0627\u0639\u062a / ~10.1 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-08 19:06:19",
+                "exit_time": "1405-05-11 20:53:13",
+                "entry_price": 2263,
+                "target_day": "0.6 \u0631\u0648\u0632 (13.8 \u0633\u0627\u0639\u062a / ~13.8 \u06a9\u0646\u062f\u0644)",
+                "exit_price": 2428,
+                "reason": "Take Profit (Paper)"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-12 17:00:35",
+                "exit_time": "1405-05-15 17:02:59",
+                "entry_price": 3645,
+                "target_day": "0.5 \u0631\u0648\u0632 (11.5 \u0633\u0627\u0639\u062a / ~11.5 \u06a9\u0646\u062f\u0644)",
+                "exit_price": 6186,
+                "reason": "Take Profit (Paper)"
+            }
+        ]
+    },
+    "NOT/IRT": {
+        "signal": "BUY",
+        "entry_price": 65,
+        "target_price": 70,
+        "stop_price": 63,
+        "oco_order_id": null,
+        "updated_at": "1405-05-17 16:02:34",
+        "target_day": "0.5 \u0631\u0648\u0632 (12.3 \u0633\u0627\u0639\u062a / ~12.3 \u06a9\u0646\u062f\u0644)",
+        "trade_history": []
+    },
+    "KAITO/IRT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "1405-05-16 21:00:53",
+        "target_day": "0.9 \u0631\u0648\u0632 (21.7 \u0633\u0627\u0639\u062a / ~21.7 \u06a9\u0646\u062f\u0644)",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-04 00:10:59",
+                "exit_time": "1405-05-04 14:42:13",
+                "entry_price": 182360,
+                "target_day": "0.4 \u0631\u0648\u0632 (10.1 \u0633\u0627\u0639\u062a / ~10.1 \u06a9\u0646\u062f\u0644)",
+                "exit_price": 207120,
+                "reason": "Take Profit (Paper)"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-10 16:08:27",
+                "exit_time": "1405-05-11 23:23:15",
+                "entry_price": 217834,
+                "exit_price": 200579,
+                "target_day": "0.7 \u0631\u0648\u0632 (16.1 \u0633\u0627\u0639\u062a / ~16.1 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-14 12:05:54",
+                "exit_time": "1405-05-15 12:45:06",
+                "entry_price": 178538,
+                "exit_price": 165000,
+                "target_day": "0.6 \u0631\u0648\u0632 (14.0 \u0633\u0627\u0639\u062a / ~14.0 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-16 09:05:28",
+                "exit_time": "1405-05-16 21:00:53",
+                "entry_price": 171744,
+                "exit_price": 161600,
+                "target_day": "0.9 \u0631\u0648\u0632 (21.7 \u0633\u0627\u0639\u062a / ~21.7 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            }
+        ]
+    },
+    "PUMP/IRT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "1405-05-18 23:20:27",
+        "target_day": "0.6 \u0631\u0648\u0632 (14.4 \u0633\u0627\u0639\u062a / ~14.4 \u06a9\u0646\u062f\u0644)",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-04 07:47:10",
+                "exit_time": "1405-05-05 01:43:21",
+                "entry_price": 338,
+                "target_day": "0.6 \u0631\u0648\u0632 (13.5 \u0633\u0627\u0639\u062a / ~13.5 \u06a9\u0646\u062f\u0644)",
+                "exit_price": 380,
+                "reason": "Take Profit (Paper)"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-17 21:03:53",
+                "exit_time": "1405-05-18 23:20:27",
+                "entry_price": 446,
+                "target_day": "0.6 \u0631\u0648\u0632 (14.4 \u0633\u0627\u0639\u062a / ~14.4 \u06a9\u0646\u062f\u0644)",
+                "exit_price": 504,
+                "reason": "Take Profit (Paper)"
+            }
+        ]
+    },
+    "BARD/IRT": {
+        "signal": "BUY",
+        "entry_price": 21342,
+        "target_price": 25501,
+        "stop_price": 19199,
+        "oco_order_id": null,
+        "updated_at": "1405-05-13 13:50:30",
+        "target_day": "1.3 \u0631\u0648\u0632 (31.7 \u0633\u0627\u0639\u062a / ~31.7 \u06a9\u0646\u062f\u0644)",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-03 12:06:16",
+                "exit_time": "1405-05-04 07:41:32",
+                "entry_price": 24849,
+                "exit_price": 23550,
+                "target_day": "0.4 \u0631\u0648\u0632 (9.6 \u0633\u0627\u0639\u062a / ~9.6 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-06 20:03:41",
+                "exit_time": "1405-05-11 17:23:35",
+                "entry_price": 21610,
+                "exit_price": 20582,
+                "target_day": "0.7 \u0631\u0648\u0632 (17.3 \u0633\u0627\u0639\u062a / ~17.3 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            }
+        ]
+    },
+    "PROM/IRT": {
+        "signal": "BUY",
+        "entry_price": 369237,
+        "target_price": 420715,
+        "stop_price": 342392,
+        "oco_order_id": null,
+        "updated_at": "1405-05-15 18:00:52",
+        "target_day": "0.6 \u0631\u0648\u0632 (13.4 \u0633\u0627\u0639\u062a / ~13.4 \u06a9\u0646\u062f\u0644)",
+        "trade_history": []
+    },
+    "LA/IRT": {
+        "signal": "BUY",
+        "entry_price": 9557,
+        "target_price": 11326,
+        "stop_price": 8643,
+        "oco_order_id": null,
+        "updated_at": "1405-05-16 19:24:07",
+        "target_day": "0.3 \u0631\u0648\u0632 (6.0 \u0633\u0627\u0639\u062a / ~6.0 \u06a9\u0646\u062f\u0644)",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-02 17:05:09",
+                "exit_time": "1405-05-05 20:54:33",
+                "entry_price": 14436,
+                "target_day": "0.4 \u0631\u0648\u0632 (8.5 \u0633\u0627\u0639\u062a / ~8.5 \u06a9\u0646\u062f\u0644)",
+                "exit_price": 19900,
+                "reason": "Take Profit (Paper)"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-05 21:02:19",
+                "exit_time": "1405-05-06 02:17:35",
+                "entry_price": 19539,
+                "exit_price": 12400,
+                "target_day": "0.8 \u0631\u0648\u0632 (18.7 \u0633\u0627\u0639\u062a / ~18.7 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-12 00:04:01",
+                "exit_time": "1405-05-12 06:12:00",
+                "entry_price": 9468,
+                "exit_price": 9100,
+                "target_day": "0.9 \u0631\u0648\u0632 (20.9 \u0633\u0627\u0639\u062a / ~20.9 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-12 07:00:33",
+                "exit_time": "1405-05-14 08:01:26",
+                "entry_price": 9204,
+                "exit_price": 8238,
+                "target_day": "0.5 \u0631\u0648\u0632 (12.2 \u0633\u0627\u0639\u062a / ~12.2 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            },
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-14 12:06:05",
+                "exit_time": "1405-05-16 08:40:37",
+                "entry_price": 8718,
+                "target_day": "0.4 \u0631\u0648\u0632 (10.3 \u0633\u0627\u0639\u062a / ~10.3 \u06a9\u0646\u062f\u0644)",
+                "exit_price": 10274,
+                "reason": "Take Profit (Paper)"
+            }
+        ]
+    },
+    "ZAMA/IRT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "1405-05-18 16:21:57",
+        "target_day": "0.3 \u0631\u0648\u0632 (8.0 \u0633\u0627\u0639\u062a / ~8.0 \u06a9\u0646\u062f\u0644)",
+        "trade_history": [
+            {
+                "type": "PAPER_TRADE",
+                "entry_time": "1405-05-12 09:07:07",
+                "exit_time": "1405-05-18 16:21:57",
+                "entry_price": 9444,
+                "exit_price": 8520,
+                "target_day": "0.3 \u0631\u0648\u0632 (8.0 \u0633\u0627\u0639\u062a / ~8.0 \u06a9\u0646\u062f\u0644)",
+                "reason": "Stop Loss (Paper)"
+            }
+        ]
+    },
+    "HOME/IRT": {
+        "signal": "HOLD",
+        "entry_price": 0.0,
+        "target_price": 0.0,
+        "stop_price": 0.0,
+        "oco_order_id": null,
+        "updated_at": "1405-05-10 16:52:43",
+        "target_day": 0.0,
         "trade_history": []
     }
 }
