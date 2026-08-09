@@ -1,5 +1,5 @@
 {
-    "ZIL/USDT": {
+    "ZIL/IRT": {
         "signal": "HOLD",
         "entry_price": 0.0,
         "target_price": 0.0,
@@ -17,7 +17,7 @@
             }
         ]
     },
-    "TRX/USDT": {
+    "TRX/IRT": {
         "signal": "HOLD",
         "entry_price": 0.0,
         "target_price": 0.0,
@@ -35,7 +35,7 @@
             }
         ]
     },
-    "SAND/USDT": {
+    "SAND/IRT": {
         "signal": "HOLD",
         "entry_price": 0.0,
         "target_price": 0.0,
@@ -44,7 +44,7 @@
         "updated_at": "2026-07-07 21:45:03",
         "trade_history": []
     },
-    "JASMY/USDT": {
+    "JASMY/IRT": {
         "signal": "HOLD",
         "entry_price": 0.0,
         "target_price": 0.0,
@@ -62,7 +62,7 @@
             }
         ]
     },
-    "SUI/USDT": {
+    "SUI/IRT": {
         "signal": "HOLD",
         "entry_price": 0.0,
         "target_price": 0.0,
@@ -80,7 +80,7 @@
             }
         ]
     },
-    "APE/USDT": {
+    "APE/IRT": {
         "signal": "BUY",
         "entry_price": 26848,
         "target_price": 31079,
@@ -89,7 +89,7 @@
         "updated_at": "2026-07-08 14:49:01",
         "trade_history": []
     },
-    "DYDX/USDT": {
+    "DYDX/IRT": {
         "signal": "HOLD",
         "entry_price": 0.0,
         "target_price": 0.0,
@@ -107,7 +107,7 @@
             }
         ]
     },
-    "BICO/USDT": {
+    "BICO/IRT": {
         "signal": "HOLD",
         "entry_price": 0.0,
         "target_price": 0.0,
@@ -141,7 +141,7 @@
             }
         ]
     },
-    "TNSR/USDT": {
+    "TNSR/IRT": {
         "signal": "HOLD",
         "entry_price": 0.0,
         "target_price": 0.0,
@@ -167,7 +167,7 @@
             }
         ]
     },
-    "XLM/USDT": {
+    "XLM/IRT": {
         "signal": "HOLD",
         "entry_price": 0.0,
         "target_price": 0.0,
@@ -185,7 +185,7 @@
             }
         ]
     },
-    "POL/USDT": {
+    "POL/IRT": {
         "signal": "HOLD",
         "entry_price": 0.0,
         "target_price": 0.0,
@@ -211,7 +211,7 @@
             }
         ]
     },
-    "VET/USDT": {
+    "VET/IRT": {
         "signal": "BUY",
         "entry_price": 866,
         "target_price": 944,
@@ -220,7 +220,7 @@
         "updated_at": "1405-04-20 12:04:37",
         "trade_history": []
     },
-    "BASED/USDT": {
+    "BASED/IRT": {
         "signal": "HOLD",
         "entry_price": 0.0,
         "target_price": 0.0,
@@ -238,7 +238,7 @@
             }
         ]
     },
-    "BTC/USDT": {
+    "BTC/IRT": {
         "signal": "BUY",
         "entry_price": 12238108155,
         "target_price": 12706396370,
@@ -247,7 +247,7 @@
         "updated_at": "1405-04-24 20:38:55",
         "trade_history": []
     },
-    "ETH/USDT": {
+    "ETH/IRT": {
         "signal": "BUY",
         "entry_price": 362415714,
         "target_price": 392554186,
@@ -256,7 +256,7 @@
         "updated_at": "1405-04-24 20:39:00",
         "trade_history": []
     },
-    "AVAX/USDT": {
+    "AVAX/IRT": {
         "signal": "BUY",
         "entry_price": 1260876,
         "target_price": 1315894,
@@ -265,7 +265,7 @@
         "updated_at": "1405-04-24 20:39:08",
         "trade_history": []
     },
-    "NEAR/USDT": {
+    "NEAR/IRT": {
         "signal": "BUY",
         "entry_price": 388034,
         "target_price": 417699,
@@ -274,7 +274,7 @@
         "updated_at": "1405-04-24 20:39:14",
         "trade_history": []
     },
-    "SOL/USDT": {
+    "SOL/IRT": {
         "signal": "HOLD",
         "entry_price": 0.0,
         "target_price": 0.0,
@@ -283,7 +283,7 @@
         "updated_at": "1405-04-24 21:11:07",
         "trade_history": []
     },
-    "XRP/USDT": {
+    "XRP/IRT": {
         "signal": "BUY",
         "entry_price": 209500,
         "target_price": 219842,
@@ -292,7 +292,7 @@
         "updated_at": "1405-04-24 21:11:18",
         "trade_history": []
     },
-    "ADA/USDT": {
+    "ADA/IRT": {
         "signal": "HOLD",
         "entry_price": 0.0,
         "target_price": 0.0,
@@ -301,7 +301,7 @@
         "updated_at": "1405-04-24 21:11:07",
         "trade_history": []
     },
-    "DOGE/USDT": {
+    "DOGE/IRT": {
         "signal": "HOLD",
         "entry_price": 0.0,
         "target_price": 0.0,
@@ -310,7 +310,7 @@
         "updated_at": "1405-04-24 21:11:07",
         "trade_history": []
     },
-    "LINK/USDT": {
+    "LINK/IRT": {
         "signal": "BUY",
         "entry_price": 1612218,
         "target_price": 1765865,
@@ -319,7 +319,7 @@
         "updated_at": "1405-04-24 21:11:26",
         "trade_history": []
     },
-    "UNI/USDT": {
+    "UNI/IRT": {
         "signal": "BUY",
         "entry_price": 686437,
         "target_price": 737988,
@@ -328,7 +328,7 @@
         "updated_at": "1405-04-24 21:11:32",
         "trade_history": []
     },
-    "LTC/USDT": {
+    "LTC/IRT": {
         "signal": "HOLD",
         "entry_price": 0.0,
         "target_price": 0.0,
@@ -337,7 +337,7 @@
         "updated_at": "1405-04-24 21:11:07",
         "trade_history": []
     },
-    "BCH/USDT": {
+    "BCH/IRT": {
         "signal": "HOLD",
         "entry_price": 0.0,
         "target_price": 0.0,
@@ -346,7 +346,7 @@
         "updated_at": "1405-04-24 21:11:07",
         "trade_history": []
     },
-    "ALGO/USDT": {
+    "ALGO/IRT": {
         "signal": "HOLD",
         "entry_price": 0.0,
         "target_price": 0.0,
@@ -355,7 +355,7 @@
         "updated_at": "1405-04-24 21:11:07",
         "trade_history": []
     },
-    "HBAR/USDT": {
+    "HBAR/IRT": {
         "signal": "BUY",
         "entry_price": 12720,
         "target_price": 13508,
