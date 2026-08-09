@@ -19,8 +19,8 @@ now_shamsi=jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 # ==========================================
 PAPER_TRADING = True
 RISK_PERCENT = 2.0
-MAX_DAILY_TRADES = 6
-MAX_OPEN_POSITIONS = 6
+MAX_DAILY_TRADES = 25
+MAX_OPEN_POSITIONS = 25
 target_day=0
 # تعاریف وضعیت‌های ربات
 STATE_IDLE = "IDLE"
@@ -635,19 +635,50 @@ def send_nobitex_error_email(coin_name, operation_type, error_message):
     send_beautiful_email(subject, title, "#ef4444", rows_data)
 
 
+def maxhad(symbol):
+    url = "https://apiv2.nobitex.ir/market/stats"
+    headers = {"Authorization": f"Token {NOBITEX_TOKEN_PUBLIC}", "Content-Type": "application/json"}
+    stat_name = "dayHigh"
+    #print(symbol)
+    # پارامترها به جای بدنه، به صورت Query Parameters ارسال می‌شوند
+    params = {
+        "srcCurrency": symbol.upper(),  # معمولاً حروف کوچک می‌خواهد (مثل eth)
+        "dstCurrency": "irt",  # اگر بازار تتری است یا ریل (irt)
+    }
+
+    response_data = _send_request_with_retry("GET", url, headers=headers, params=params)
+
+    if response_data and isinstance(response_data, dict):
+        # بررسی اینکه آیا درخواست موفق بوده یا ارور داده
+        if response_data.get("status") == "ok":
+            stats_data = response_data.get("stats",{})  # بسته به ساختار JSON پاسخ نوبیتکس
+
+            market_key = f"{symbol.upper()}-irt"
+
+            market_info = stats_data.get(market_key, {})
+            # استخراج مقدار مورد نظر (پیش‌فرض روی dayHigh)
+            value = market_info.get(stat_name)
+            value=float(value)/10
+            #print(f"{value}")
+            return float(value)
+        else:
+            print(f"API Error: {response_data}")
+
+    return None
+
 def monitor_market():
     global target_day
     logger.info("🔥 ربات نوسان‌گیری با استراتژی کندل ۱ ساعته (1h) فعال شد...")
 
     symbols = [
-        "BTC/USDT", "ETH/USDT", "SOL/USDT", "AVAX/USDT", "NEAR/USDT",
-        "SUI/USDT", "TRX/USDT", "XRP/USDT", "ADA/USDT", "DOGE/USDT",
-        "LINK/USDT", "UNI/USDT", "LTC/USDT", "BCH/USDT", "TON/USDT",
-        "POL/USDT", "ALGO/USDT", "XLM/USDT", "HBAR/USDT", "VET/USDT",
-        "GRT/USDT", "STX/USDT", "ANKR/USDT", "HMSTR/USDT", "DOGS/USDT",
-        "TNSR/USDT", "2Z/USDT", "RENDER/USDT", "APE/USDT", "DYDX/USDT",
-        "BASED/USDT",
-        "ONE/USDT", "BICO/USDT","NOT/USDT","KAITO/USDT","PUMP/USDT","BARD/USDT","PROM/USDT","LA/USDT","ZAMA/USDT"
+        "BTC/IRT", "ETH/IRT", "SOL/IRT", "AVAX/IRT", "NEAR/IRT",
+        "SUI/IRT", "TRX/IRT", "XRP/IRT", "ADA/IRT", "DOGE/IRT",
+        "LINK/IRT", "UNI/IRT", "LTC/IRT", "BCH/IRT", "TON/IRT",
+        "POL/IRT", "ALGO/IRT", "XLM/IRT", "HBAR/IRT", "VET/IRT",
+        "GRT/IRT", "STX/IRT", "ANKR/IRT", "HMSTR/IRT", "DOGS/IRT",
+        "TNSR/IRT", "2Z/IRT", "RENDER/IRT", "APE/IRT", "DYDX/IRT",
+        "BASED/IRT",
+        "ONE/IRT", "BICO/IRT","NOT/IRT","KAITO/IRT","PUMP/IRT","BARD/IRT","PROM/IRT","LA/IRT","ZAMA/IRT"
     ]
 
     DB_FILE = "live_signals_v2.json"
@@ -734,6 +765,8 @@ def monitor_market():
                 status_display = "HOLD"
                 position_details = " | تعداد: -        | هدف: -          | استاپ: -         | سود/زیان: -"
 
+                maxprice = maxhad(coin_name_lower)
+
                 if position.get("signal") == 'BUY':
                     color_code = GREEN
                     status_display = "BUY (OCO active)"
@@ -786,7 +819,7 @@ def monitor_market():
                             }
                             save_last_signals(last_signals)
 
-                        elif price_in_toman >= position["target_price"]:
+                        elif price_in_toman >= position["target_price"] or maxprice:
                             logger.info(f"🎯 حد سود فرضی برای {symbol} در قیمت {price_in_toman:,} تومان لمس شد.")
                             simulate_sell_trade(symbol, current_price, dollar_price, reason="Take Profit (Paper)")
                             now_str = jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
