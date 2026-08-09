@@ -19,8 +19,8 @@ now_shamsi=jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 # ==========================================
 PAPER_TRADING = True
 RISK_PERCENT = 2.0
-MAX_DAILY_TRADES = 25
-MAX_OPEN_POSITIONS = 25
+MAX_DAILY_TRADES = 6
+MAX_OPEN_POSITIONS = 6
 target_day=0
 # تعاریف وضعیت‌های ربات
 STATE_IDLE = "IDLE"
@@ -793,6 +793,11 @@ def monitor_market():
                 elif current_signal == 'SELL':
                     color_code = RED
                     status_display = "SELL"
+                    position_details = " | تعداد: -        | هدف: -          | استاپ: -         | سود/زیان: -"
+                else:
+                    color_code = BLUE
+                    status_display = "HOLD"
+                    position_details = " | تعداد: -        | هدف: -          | استاپ: -         | سود/زیان: -"
 
                 plain_log_line = f"📊 {symbol:<10} | قیمت: {toman_str:<10} تومان | وضعیت: {status_display:<18}{position_details} | زمان: {current_time_str}  زمان تقریبی رسیدن به قیمت هدف : {target_day}"
                 log_lines_buffer.append(plain_log_line)
