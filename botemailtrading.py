@@ -803,7 +803,7 @@ def monitor_market():
                 # ============ مدیریت خروج پوزیشن باز ============
                 if position.get("signal") == 'BUY':
                     if PAPER_TRADING:
-                        if price_in_toman <= position["stop_price"] or maxprice==toman_str:
+                        if price_in_toman <= position["stop_price"]:
                             logger.warning(f"📉 حد ضرر فرضی برای {symbol} در قیمت {price_in_toman:,} تومان لمس شد.")
                             simulate_sell_trade(symbol, current_price, dollar_price, reason="Stop Loss (Paper)")
                             now_str = jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -820,7 +820,7 @@ def monitor_market():
                             }
                             save_last_signals(last_signals)
 
-                        elif price_in_toman >= position["target_price"] or maxprice==toman_str:
+                        elif price_in_toman >= position["target_price"]:
                             logger.info(f"🎯 حد سود فرضی برای {symbol} در قیمت {price_in_toman:,} تومان لمس شد.")
                             simulate_sell_trade(symbol, current_price, dollar_price, reason="Take Profit (Paper)")
                             now_str = jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
