@@ -666,7 +666,6 @@ def maxhad(symbol):
 
     return None
 
-
 def monitor_market():
     global target_day
     logger.info("🔥 ربات نوسان‌گیری با استراتژی کندل ۱ ساعته (1h) فعال شد...")
@@ -679,7 +678,7 @@ def monitor_market():
         "GRT/IRT", "STX/IRT", "ANKR/IRT", "HMSTR/IRT", "DOGS/IRT",
         "TNSR/IRT", "2Z/IRT", "RENDER/IRT", "APE/IRT", "DYDX/IRT",
         "BASED/IRT",
-        "ONE/IRT", "BICO/IRT", "NOT/IRT", "KAITO/IRT", "PUMP/IRT", "BARD/IRT", "PROM/IRT", "LA/IRT", "ZAMA/IRT"
+        "ONE/IRT", "BICO/IRT","NOT/IRT","KAITO/IRT","PUMP/IRT","BARD/IRT","PROM/IRT","LA/IRT","ZAMA/IRT"
     ]
 
     DB_FILE = "live_signals_v2.json"
@@ -755,19 +754,19 @@ def monitor_market():
                 toman_str = f"{price_in_toman:,.2f}" if price_in_toman < 100 else f"{int(price_in_toman):,}"
 
                 position = last_signals.get(symbol)
+
+                maxprice = maxhad(coin_name_lower)
+
                 if not isinstance(position, dict):
                     position = {
                         "signal": "HOLD", "entry_price": 0.0, "target_price": 0.0, "stop_price": 0.0,
-                        "oco_order_id": None, "updated_at": current_time_str, "target_day": 0.0, "trade_history": []
+                        "oco_order_id": None, "updated_at": current_time_str,"target_day":0.0, "trade_history": []
                     }
                     last_signals[symbol] = position
-
+                #print(position)
                 color_code = BLUE
                 status_display = "HOLD"
                 position_details = " | تعداد: -        | هدف: -          | استاپ: -         | سود/زیان: -"
-
-                # دریافت بالاترین قیمت ۲۴ ساعت گذشته از نوبیتکس
-                maxprice = maxhad(coin_name_lower)
 
                 if position.get("signal") == 'BUY':
                     color_code = GREEN
@@ -776,7 +775,7 @@ def monitor_market():
                     p_entry = position.get("entry_price", 0)
                     p_target = position.get("target_price", 0)
                     p_stop = position.get("stop_price", 0)
-                    target_day = position.get("target_day", 0)
+                    target_day=position.get("target_day", 0)
 
                     calc_qty = BUDGET_TOMAN / p_entry if p_entry > 0 else 0.0
                     potential_profit = (p_target - p_entry) * calc_qty if p_entry > 0 else 0.0
@@ -793,11 +792,6 @@ def monitor_market():
                 elif current_signal == 'SELL':
                     color_code = RED
                     status_display = "SELL"
-                    position_details = " | تعداد: -        | هدف: -          | استاپ: -         | سود/زیان: -"
-                else:
-                    color_code = BLUE
-                    status_display = "HOLD"
-                    position_details = " | تعداد: -        | هدف: -          | استاپ: -         | سود/زیان: -"
 
                 plain_log_line = f"📊 {symbol:<10} | قیمت: {toman_str:<10} تومان | وضعیت: {status_display:<18}{position_details} | زمان: {current_time_str}  زمان تقریبی رسیدن به قیمت هدف : {target_day}"
                 log_lines_buffer.append(plain_log_line)
@@ -809,42 +803,35 @@ def monitor_market():
                 # ============ مدیریت خروج پوزیشن باز ============
                 if position.get("signal") == 'BUY':
                     if PAPER_TRADING:
-                        # بررسی اینکه آیا قیمت لحظه‌ای یا حداکثر قیمت ۲۴ ساعت گذشته به حد ضرر یا حد سود رسیده است
-                        hit_stop = price_in_toman <= position["stop_price"]
-                        hit_target = price_in_toman >= position["target_price"] or (
-                                    maxprice is not None and maxprice >= position["target_price"])
-
-                        if hit_stop:
+                        if price_in_toman <= position["stop_price"] or maxprice==toman_str:
                             logger.warning(f"📉 حد ضرر فرضی برای {symbol} در قیمت {price_in_toman:,} تومان لمس شد.")
                             simulate_sell_trade(symbol, current_price, dollar_price, reason="Stop Loss (Paper)")
                             now_str = jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             past_trade = {
                                 "type": "PAPER_TRADE", "entry_time": position.get("updated_at", "نامشخص"),
                                 "exit_time": now_str, "entry_price": position.get("entry_price", 0.0),
-                                "exit_price": int(price_in_toman), "target_day": position.get("target_day"),
+                                "exit_price": int(price_in_toman),"target_day":position.get("target_day"),
                                 "reason": "Stop Loss (Paper)"
                             }
                             last_signals[symbol] = {
                                 "signal": "HOLD", "entry_price": 0.0, "target_price": 0.0, "stop_price": 0.0,
-                                "oco_order_id": None, "updated_at": now_str, "target_day": position.get("target_day"),
+                                "oco_order_id": None, "updated_at": now_str,"target_day":position.get("target_day"),
                                 "trade_history": position.get("trade_history", []) + [past_trade]
                             }
                             save_last_signals(last_signals)
 
-                        elif hit_target:
-                            logger.info(
-                                f"🎯 حد سود فرضی برای {symbol} لمس شد (قیمت لحظه‌ای: {price_in_toman:,} | اوج ۲۴ ساعته: {maxprice}).")
+                        elif price_in_toman >= position["target_price"] or maxprice==toman_str:
+                            logger.info(f"🎯 حد سود فرضی برای {symbol} در قیمت {price_in_toman:,} تومان لمس شد.")
                             simulate_sell_trade(symbol, current_price, dollar_price, reason="Take Profit (Paper)")
                             now_str = jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             past_trade = {
                                 "type": "PAPER_TRADE", "entry_time": position.get("updated_at", "نامشخص"),
-                                "exit_time": now_str, "entry_price": position.get("entry_price", 0.0),
-                                "target_day": position.get("target_day"),
+                                "exit_time": now_str, "entry_price": position.get("entry_price", 0.0),"target_day":position.get("target_day"),
                                 "exit_price": int(price_in_toman), "reason": "Take Profit (Paper)"
                             }
                             last_signals[symbol] = {
                                 "signal": "HOLD", "entry_price": 0.0, "target_price": 0.0, "stop_price": 0.0,
-                                "oco_order_id": None, "updated_at": now_str, "target_day": position.get("target_day"),
+                                "oco_order_id": None, "updated_at": now_str,"target_day":position.get("target_day"),
                                 "trade_history": position.get("trade_history", []) + [past_trade]
                             }
                             save_last_signals(last_signals)
@@ -859,18 +846,17 @@ def monitor_market():
 
                             entry_price = position.get("entry_price") or 1
                             if coin_balance < (BUDGET_TOMAN / entry_price) * 0.05:
-                                logger.info(
-                                    f"🎉 [خروج موفق OCO] اردر OCO ارز {symbol} در صرافی با موفقیت اجرا و بسته شد.")
+                                logger.info(f"🎉 [خروج موفق OCO] اردر OCO ارز {symbol} در صرافی با موفقیت اجرا و بسته شد.")
                                 now_str = jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                                 past_trade = {
                                     "type": "REAL_OCO_TRADE", "entry_time": position.get("updated_at", "نامشخص"),
                                     "exit_time": now_str, "entry_price": position.get("entry_price", 0.0),
-                                    "exit_price": int(price_in_toman), "target_day": position.get("target_day"),
+                                    "exit_price": int(price_in_toman),"target_day":position.get("target_day"),
                                     "reason": "اجرای حد سود یا حد ضرر OCO در صرافی نوبیتکس"
                                 }
                                 last_signals[symbol] = {
                                     "signal": "HOLD", "entry_price": 0.0, "target_price": 0.0, "stop_price": 0.0,
-                                    "oco_order_id": None, "updated_at": now_str, "target_day": 0.0,
+                                    "oco_order_id": None, "updated_at": now_str,"target_day":0.0,
                                     "trade_history": position.get("trade_history", []) + [past_trade]
                                 }
                                 save_last_signals(last_signals)
@@ -878,9 +864,8 @@ def monitor_market():
                 # ============ صدور سیگنال خرید جدید ============
                 elif current_signal == 'BUY' and position.get("signal") != "BUY":
                     if open_positions_count >= MAX_OPEN_POSITIONS:
-                        color_code = PINK
-                        logger.warning(
-                            f"{color_code}⚠️ سیگنال خرید {symbol} رد شد. سقف پوزیشن‌های باز ({MAX_OPEN_POSITIONS}) پر است.")
+                        color_code=PINK
+                        logger.warning(f"{color_code}⚠️ سیگنال خرید {symbol} رد شد. سقف پوزیشن‌های باز ({MAX_OPEN_POSITIONS}) پر است.")
                         continue
 
                     dollar_price_now = get_iran_dollar_price()
@@ -907,8 +892,7 @@ def monitor_market():
                     final_target = int(price_in_toman * (1 + profit_pct))
                     final_stop = int(price_in_toman * (1 - loss_pct))
 
-                    order_success, order_id = place_buy_order_and_notify(symbol, price_in_toman,
-                                                                         budget_toman=BUDGET_TOMAN)
+                    order_success, order_id = place_buy_order_and_notify(symbol, price_in_toman, budget_toman=BUDGET_TOMAN)
 
                     if order_success:
                         if PAPER_TRADING:
@@ -929,8 +913,7 @@ def monitor_market():
 
                         if real_quantity > 0:
                             if not PAPER_TRADING:
-                                logger.info(
-                                    f"📈 [تکمیل خرید واقعی] مقدار خالص معامله شده بعد کارمزد: {real_quantity:.4f}")
+                                logger.info(f"📈 [تکمیل خرید واقعی] مقدار خالص معامله شده بعد کارمزد: {real_quantity:.4f}")
                                 place_nobitex_oco_sell_order(symbol, real_quantity, final_target, final_stop)
 
                             now_str = jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
