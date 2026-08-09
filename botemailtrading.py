@@ -755,7 +755,7 @@ def monitor_market():
 
                 position = last_signals.get(symbol)
 
-                maxprice = maxhad(coin_name_lower)
+
 
                 if not isinstance(position, dict):
                     position = {
@@ -767,7 +767,7 @@ def monitor_market():
                 color_code = BLUE
                 status_display = "HOLD"
                 position_details = " | تعداد: -        | هدف: -          | استاپ: -         | سود/زیان: -"
-
+                maxprice = maxhad(coin_name_lower)
                 if position.get("signal") == 'BUY':
                     color_code = GREEN
                     status_display = "BUY (OCO active)"
@@ -820,7 +820,7 @@ def monitor_market():
                             }
                             save_last_signals(last_signals)
 
-                        elif price_in_toman >= position["target_price"]:
+                        elif price_in_toman >= position["target_price"] or (maxprice is not None and maxprice >= position["target_price"]):
                             logger.info(f"🎯 حد سود فرضی برای {symbol} در قیمت {price_in_toman:,} تومان لمس شد.")
                             simulate_sell_trade(symbol, current_price, dollar_price, reason="Take Profit (Paper)")
                             now_str = jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
