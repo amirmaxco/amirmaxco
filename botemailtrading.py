@@ -19,8 +19,8 @@ now_shamsi=jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 # ==========================================
 PAPER_TRADING = True
 RISK_PERCENT = 2.0
-MAX_DAILY_TRADES = 6
-MAX_OPEN_POSITIONS = 6
+MAX_DAILY_TRADES = 25
+MAX_OPEN_POSITIONS = 25
 target_day=0
 # تعاریف وضعیت‌های ربات
 STATE_IDLE = "IDLE"
@@ -643,7 +643,7 @@ def maxhad(symbol):
     # پارامترها به جای بدنه، به صورت Query Parameters ارسال می‌شوند
     params = {
         "srcCurrency": symbol.upper(),  # معمولاً حروف کوچک می‌خواهد (مثل eth)
-        "dstCurrency": "irt",  # اگر بازار تتری است یا ریل (irt)
+        "dstCurrency": "USDT",  # اگر بازار تتری است یا ریل (irt)
     }
 
     response_data = _send_request_with_retry("GET", url, headers=headers, params=params)
@@ -658,9 +658,9 @@ def maxhad(symbol):
             market_info = stats_data.get(market_key, {})
             # استخراج مقدار مورد نظر (پیش‌فرض روی dayHigh)
             value = market_info.get(stat_name)
-            value=float(value)/10
+            value=value
             #print(f"{value}")
-            return float(value)
+            return value
         else:
             print(f"API Error: {response_data}")
 
@@ -671,14 +671,14 @@ def monitor_market():
     logger.info("🔥 ربات نوسان‌گیری با استراتژی کندل ۱ ساعته (1h) فعال شد...")
 
     symbols = [
-        "BTC/IRT", "ETH/IRT", "SOL/IRT", "AVAX/IRT", "NEAR/IRT",
-        "SUI/IRT", "TRX/IRT", "XRP/IRT", "ADA/IRT", "DOGE/IRT",
-        "LINK/IRT", "UNI/IRT", "LTC/IRT", "BCH/IRT", "TON/IRT",
-        "POL/IRT", "ALGO/IRT", "XLM/IRT", "HBAR/IRT", "VET/IRT",
-        "GRT/IRT", "STX/IRT", "ANKR/IRT", "HMSTR/IRT", "DOGS/IRT",
-        "TNSR/IRT", "2Z/IRT", "RENDER/IRT", "APE/IRT", "DYDX/IRT",
-        "BASED/IRT",
-        "ONE/IRT", "BICO/IRT", "NOT/IRT", "KAITO/IRT", "PUMP/IRT", "BARD/IRT", "PROM/IRT", "LA/IRT", "ZAMA/IRT"
+        "BTC/USDT", "ETH/USDT", "SOL/USDT", "AVAX/USDT", "NEAR/USDT",
+        "SUI/USDT", "TRX/USDT", "XRP/USDT", "ADA/USDT", "DOGE/USDT",
+        "LINK/USDT", "UNI/USDT", "LTC/USDT", "BCH/USDT", "TON/USDT",
+        "POL/USDT", "ALGO/USDT", "XLM/USDT", "HBAR/USDT", "VET/USDT",
+        "GRT/USDT", "STX/USDT", "ANKR/USDT", "HMSTR/USDT", "DOGS/USDT",
+        "TNSR/USDT", "2Z/USDT", "RENDER/USDT", "APE/USDT", "DYDX/USDT",
+        "BASED/USDT",
+        "ONE/USDT", "BICO/USDT", "NOT/USDT", "KAITO/USDT", "PUMP/USDT", "BARD/USDT", "PROM/USDT", "LA/USDT", "ZAMA/USDT"
     ]
 
     DB_FILE = "live_signals_v2.json"
