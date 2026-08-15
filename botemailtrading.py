@@ -643,7 +643,7 @@ def maxhad(symbol):
     # پارامترها به جای بدنه، به صورت Query Parameters ارسال می‌شوند
     params = {
         "srcCurrency": symbol.upper(),  # معمولاً حروف کوچک می‌خواهد (مثل eth)
-        "dstCurrency": "USDT",  # اگر بازار تتری است یا ریل (irt)
+        "dstCurrency": "irt",  # اگر بازار تتری است یا ریل (irt)
     }
 
     response_data = _send_request_with_retry("GET", url, headers=headers, params=params)
@@ -652,15 +652,46 @@ def maxhad(symbol):
         # بررسی اینکه آیا درخواست موفق بوده یا ارور داده
         if response_data.get("status") == "ok":
             stats_data = response_data.get("stats",{})  # بسته به ساختار JSON پاسخ نوبیتکس
-
+            #print(stats_data)
             market_key = f"{symbol.upper()}-irt"
 
             market_info = stats_data.get(market_key, {})
             # استخراج مقدار مورد نظر (پیش‌فرض روی dayHigh)
             value = market_info.get(stat_name)
-            value=value
-            #print(f"{value}")
-            return value
+
+            if value is not None:
+                return float(value) / 10
+        else:
+            print(f"API Error: {response_data}")
+
+    return None
+
+def minhad(symbol):
+    url = "https://apiv2.nobitex.ir/market/stats"
+    headers = {"Authorization": f"Token {NOBITEX_TOKEN_PUBLIC}", "Content-Type": "application/json"}
+    stat_name = "dayLow"
+    #print(symbol)
+    # پارامترها به جای بدنه، به صورت Query Parameters ارسال می‌شوند
+    params = {
+        "srcCurrency": symbol.upper(),  # معمولاً حروف کوچک می‌خواهد (مثل eth)
+        "dstCurrency": "irt",  # اگر بازار تتری است یا ریل (irt)
+    }
+
+    response_data = _send_request_with_retry("GET", url, headers=headers, params=params)
+
+    if response_data and isinstance(response_data, dict):
+        # بررسی اینکه آیا درخواست موفق بوده یا ارور داده
+        if response_data.get("status") == "ok":
+            stats_data = response_data.get("stats",{})  # بسته به ساختار JSON پاسخ نوبیتکس
+            #print(stats_data)
+            market_key = f"{symbol.upper()}-irt"
+
+            market_info = stats_data.get(market_key, {})
+            # استخراج مقدار مورد نظر (پیش‌فرض روی dayHigh)
+            value = market_info.get(stat_name)
+
+            if value is not None:
+                return float(value) / 10
         else:
             print(f"API Error: {response_data}")
 
@@ -679,6 +710,7 @@ def monitor_market():
         "TNSR/USDT", "2Z/USDT", "RENDER/USDT", "APE/USDT", "DYDX/USDT",
         "BASED/USDT",
         "ONE/USDT", "BICO/USDT", "NOT/USDT", "KAITO/USDT", "PUMP/USDT", "BARD/USDT", "PROM/USDT", "LA/USDT", "ZAMA/USDT"
+        ,"HOME/USDT"
     ]
 
     DB_FILE = "live_signals_v2.json"
@@ -765,6 +797,9 @@ def monitor_market():
                 status_display = "HOLD"
                 position_details = " | تعداد: -        | هدف: -          | استاپ: -         | سود/زیان: -"
                 maxprice = maxhad(coin_name_lower)
+                minprice = minhad(coin_name_lower)
+                #print(maxprice)
+                #print(minprice)
                 if position.get("signal") == 'BUY':
                     color_code = GREEN
                     status_display = "BUY (OCO active)"
@@ -800,7 +835,7 @@ def monitor_market():
                 # ============ مدیریت خروج پوزیشن باز ============
                 if position.get("signal") == 'BUY':
                     if PAPER_TRADING:
-                        if price_in_toman <= position["stop_price"]:
+                        if price_in_toman <= position["stop_price"] or (minprice is not None and float(minprice) <= position["stop_price"]):
                             logger.warning(f"📉 حد ضرر فرضی برای {symbol} در قیمت {price_in_toman:,} تومان لمس شد.")
                             simulate_sell_trade(symbol, current_price, dollar_price, reason="Stop Loss (Paper)")
                             now_str = jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -837,7 +872,7 @@ def monitor_market():
                                 rows_data=stop_rows_data
                             )
 
-                        elif price_in_toman >= position["target_price"] or (maxprice is not None and maxprice >= position["target_price"]):
+                        elif price_in_toman >= position["target_price"] or (maxprice is not None and float(maxprice) >= position["target_price"]) :
                             logger.info(f"🎯 حد سود فرضی برای {symbol} در قیمت {price_in_toman:,} تومان لمس شد.")
                             simulate_sell_trade(symbol, current_price, dollar_price, reason="Take Profit (Paper)")
                             now_str = jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
