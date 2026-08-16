@@ -22,6 +22,7 @@ RISK_PERCENT = 2.0
 MAX_DAILY_TRADES = 25
 MAX_OPEN_POSITIONS = 25
 target_day=0
+MAX_HOLD_HOURS = 72
 # تعاریف وضعیت‌های ربات
 STATE_IDLE = "IDLE"
 STATE_HOLDING = "HOLDING"
@@ -71,6 +72,17 @@ BLUE = "\033[0m"
 RESET = "\033[0m"
 PINK="\033[95m"
 
+
+def get_hours_since_entry(entry_time_str):
+    """محاسبه تعداد ساعت‌های گذشته از زمان ورود (بر پایه jdatetime)"""
+    try:
+        entry_dt = jdatetime.datetime.strptime(entry_time_str, "%Y-%m-%d %H:%M:%S")
+        now_dt = jdatetime.datetime.now()
+        delta = now_dt - entry_dt
+        return delta.total_seconds() / 3600
+    except Exception as e:
+        logger.error(f"⚠️ خطا در محاسبه زمان ورود: {e}")
+        return 0
 
 
 def load_last_signals(symbols):
@@ -300,7 +312,7 @@ def get_kucoin_data(symbol, timeframe, limit=300):
         return None
 
 
-def calculate_ut_bot_2h_live(df, sensitivity=4, atr_period=14):
+def calculate_ut_bot_2h_live(df, sensitivity=3, atr_period=14):
     if len(df) < max(atr_period + 5, 50):
         df['signal'] = 'HOLD'
         df['ATR'] = 0.0
@@ -764,7 +776,7 @@ def monitor_market():
                 if df is None or df.empty or len(df) < 25:
                     continue
 
-                df = calculate_ut_bot_2h_live(df, sensitivity=4, atr_period=14)
+                df = calculate_ut_bot_2h_live(df, sensitivity=3, atr_period=14)
 
                 live_row = df.iloc[-1]
                 signal_row = df.iloc[-2]
@@ -834,6 +846,54 @@ def monitor_market():
 
                 # ============ مدیریت خروج پوزیشن باز ============
                 if position.get("signal") == 'BUY':
+                    entry_time_str = position.get("updated_at", "نامشخص")
+                    hours_held = get_hours_since_entry(entry_time_str) if entry_time_str != "نامشخص" else 0
+
+                    if hours_held >= MAX_HOLD_HOURS:
+                        logger.warning(
+                            f"⏰ [{symbol}] بیش از {MAX_HOLD_HOURS:.0f} ساعت بدون رسیدن به هدف/استاپ سپری شد. خروج به دلیل انقضای زمان.")
+
+                        if PAPER_TRADING:
+                            simulate_sell_trade(symbol, current_price, dollar_price, reason="Time Exit (Paper)")
+
+                        now_str = jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        pnl_toman = int(price_in_toman - position.get("entry_price", 0.0))
+
+                        past_trade = {
+                            "type": "PAPER_TRADE" if PAPER_TRADING else "REAL_TIME_EXIT",
+                            "entry_time": position.get("updated_at", "نامشخص"),
+                            "exit_time": now_str,
+                            "entry_price": position.get("entry_price", 0.0),
+                            "exit_price": int(price_in_toman),
+                            "target_day": position.get("target_day"),
+                            "reason": "Time Exit - رسیدن به سقف زمانی نگهداری"
+                        }
+
+                        time_exit_rows_data = [
+                            ("جفت ارز", symbol),
+                            ("قیمت ورود", f"{int(position.get('entry_price', 0)):,} تومان"),
+                            ("قیمت خروج (پایان زمان)", f"{int(price_in_toman):,} تومان"),
+                            ("سود/زیان تقریبی هر واحد", f"{pnl_toman:,} تومان"),
+                            ("مدت نگهداری", f"{hours_held:.1f} ساعت"),
+                            ("زمان ورود", position.get("updated_at", "نامشخص")),
+                            ("زمان خروج", now_str),
+                        ]
+
+                        last_signals[symbol] = {
+                            "signal": "HOLD", "entry_price": 0.0, "target_price": 0.0, "stop_price": 0.0,
+                            "oco_order_id": None, "updated_at": now_str, "target_day": position.get("target_day"),
+                            "trade_history": position.get("trade_history", []) + [past_trade]
+                        }
+                        save_last_signals(last_signals)
+
+                        send_beautiful_email(
+                            subject=f"⏰ [خروج زمانی] {symbol} پس از {hours_held:.1f} ساعت بدون رسیدن به هدف/استاپ بسته شد.",
+                            title=f"خروج به دلیل انقضای زمان برای {symbol}",
+                            type_color="#f59e0b",
+                            rows_data=time_exit_rows_data
+                        )
+                        continue
+
                     if PAPER_TRADING:
                         if price_in_toman <= position["stop_price"] or (minprice is not None and float(minprice) <= position["stop_price"]):
                             logger.warning(f"📉 حد ضرر فرضی برای {symbol} در قیمت {price_in_toman:,} تومان لمس شد.")
