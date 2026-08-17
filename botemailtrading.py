@@ -1,3 +1,4 @@
+
 import time
 import ccxt
 import pandas as pd
@@ -71,6 +72,61 @@ RED = "\033[91m"
 BLUE = "\033[0m"
 RESET = "\033[0m"
 PINK="\033[95m"
+
+
+def detect_swing_points(df, window=3):
+    """
+    تشخیص قله‌ها و کف‌های محلی (Swing High/Low)
+    window: تعداد کندل قبل و بعد که باید کمتر/بیشتر باشن تا یه نقطه به‌عنوان swing تایید بشه
+    """
+    df = df.copy()
+    df['swing_high'] = False
+    df['swing_low'] = False
+
+    for i in range(window, len(df) - window):
+        # بررسی قله محلی
+        is_high = all(df['high'].iloc[i] >= df['high'].iloc[i-j] for j in range(1, window+1)) and \
+                  all(df['high'].iloc[i] >= df['high'].iloc[i+j] for j in range(1, window+1))
+        if is_high:
+            df.at[df.index[i], 'swing_high'] = True
+
+        # بررسی کف محلی
+        is_low = all(df['low'].iloc[i] <= df['low'].iloc[i-j] for j in range(1, window+1)) and \
+                 all(df['low'].iloc[i] <= df['low'].iloc[i+j] for j in range(1, window+1))
+        if is_low:
+            df.at[df.index[i], 'swing_low'] = True
+
+    return df
+
+
+def detect_market_structure(df, window=3):
+    """
+    بر اساس آخرین دو Swing High و دو Swing Low، ساختار روند رو مشخص می‌کنه
+    خروجی: 'bullish' (HH+HL), 'bearish' (LH+LL), یا 'neutral' (نامشخص)
+    """
+    df = detect_swing_points(df, window=window)
+
+    swing_highs = df[df['swing_high']]['high'].tolist()
+    swing_lows = df[df['swing_low']]['low'].tolist()
+
+    if len(swing_highs) < 2 or len(swing_lows) < 2:
+        return "خنثی"
+
+    last_high, prev_high = swing_highs[-1], swing_highs[-2]
+    last_low, prev_low = swing_lows[-1], swing_lows[-2]
+
+    is_hh = last_high > prev_high
+    is_hl = last_low > prev_low
+    is_lh = last_high < prev_high
+    is_ll = last_low < prev_low
+
+    if is_hh and is_hl:
+        return "صعودی"
+    elif is_lh and is_ll:
+        return "نزولی"
+    else:
+        return "خنثی"
+
 
 
 def get_hours_since_entry(entry_time_str):
@@ -711,7 +767,7 @@ def minhad(symbol):
 
 def monitor_market():
     global target_day
-    logger.info("🔥 ربات نوسان‌گیری با استراتژی کندل ۱ ساعته (1h) فعال شد...")
+    logger.info("🔥 ربات نوسان‌گیری با استراتژی چندتایم‌فریمه فعال شد...")
 
     symbols = [
         "BTC/USDT", "ETH/USDT", "SOL/USDT", "AVAX/USDT", "NEAR/USDT",
@@ -736,7 +792,7 @@ def monitor_market():
         current_now = datetime.now()
         current_time_str = jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        print(f"\n🔄 --- چرخه پایش آنی بازار (تایم‌فریم 1h): {current_time_str} ---")
+        print(f"\n🔄 --- چرخه پایش آنی بازار (چندتایم‌فریمه): {current_time_str} ---")
 
         if current_now.hour == 0 and current_now.minute == 0 and last_report_date != current_now.date():
             try:
@@ -777,6 +833,8 @@ def monitor_market():
                     continue
 
                 df = calculate_ut_bot_2h_live(df, sensitivity=3, atr_period=14)
+                market_structure = detect_market_structure(df, window=3)
+
 
                 live_row = df.iloc[-1]
                 signal_row = df.iloc[-2]
@@ -810,8 +868,7 @@ def monitor_market():
                 position_details = " | تعداد: -        | هدف: -          | استاپ: -         | سود/زیان: -"
                 maxprice = maxhad(coin_name_lower)
                 minprice = minhad(coin_name_lower)
-                #print(maxprice)
-                #print(minprice)
+
                 if position.get("signal") == 'BUY':
                     color_code = GREEN
                     status_display = "BUY (OCO active)"
@@ -906,7 +963,6 @@ def monitor_market():
                                 "reason": "Stop Loss (Paper)"
                             }
 
-                            # --- ✅ FIX: build proper (label, value) rows before overwriting the position ---
                             pnl_toman = int(price_in_toman - position.get("entry_price", 0.0))
                             stop_rows_data = [
                                 ("جفت ارز", symbol),
@@ -924,7 +980,6 @@ def monitor_market():
                             }
                             save_last_signals(last_signals)
 
-                            # --- ✅ FIX: use hex color for HTML email, not ANSI terminal code ---
                             send_beautiful_email(
                                 subject=f"📉 حد ضرر فرضی برای {symbol} در قیمت {price_in_toman:,} تومان لمس شد.",
                                 title=f"حد ضرر فرضی برای {symbol}",
@@ -942,7 +997,6 @@ def monitor_market():
                                 "exit_price": int(price_in_toman), "reason": "Take Profit (Paper)"
                             }
 
-                            # --- ✅ FIX: build proper (label, value) rows before overwriting the position ---
                             pnl_toman = int(price_in_toman - position.get("entry_price", 0.0))
                             target_rows_data = [
                                 ("جفت ارز", symbol),
@@ -960,7 +1014,6 @@ def monitor_market():
                             }
                             save_last_signals(last_signals)
 
-                            # --- ✅ FIX: use hex color for HTML email, not ANSI terminal code ---
                             send_beautiful_email(
                                 subject=f"🎯 حد سود فرضی برای {symbol} در قیمت {price_in_toman:,} تومان لمس شد.",
                                 title=f"حد سود فرضی برای {symbol}",
@@ -987,7 +1040,6 @@ def monitor_market():
                                     "reason": "اجرای حد سود یا حد ضرر OCO در صرافی نوبیتکس"
                                 }
 
-                                # --- ✅ FIX: send an email here too (this branch previously only logged) ---
                                 exit_price_val = int(price_in_toman)
                                 entry_price_val = int(position.get("entry_price", 0.0))
                                 pnl_toman = exit_price_val - entry_price_val
@@ -1017,8 +1069,27 @@ def monitor_market():
                                     rows_data=real_exit_rows_data
                                 )
 
-                # ============ صدور سیگنال خرید جدید ============
+                # ============ صدور سیگنال خرید جدید (چندتایم‌فریمه) ============
                 elif current_signal == 'BUY' and position.get("signal") != "BUY":
+                    # فیلتر ساختار بازار در تایم‌فریم فعلی (1h)
+                    if market_structure != "صعودی":
+                        logger.warning(
+                            f"🚫 [{symbol}] سیگنال BUY رد شد — ساختار بازار 1h هنوز '{market_structure}' است، نه صعودی (فیلتر HH/HL).")
+                        continue
+
+                    # فیلتر جدید: بررسی روند در تایم‌فریم بالاتر (مثلاً روزانه 1d)
+                    try:
+                        df_higher = get_nobitex_data(symbol, timeframe="1d", limit=100)
+                        if df_higher is not None and not df_higher.empty:
+                            higher_structure = detect_market_structure(df_higher, window=3)
+                            if higher_structure != "صعودی":
+                                logger.warning(
+                                    f"🚫 [{symbol}] سیگنال BUY رد شد — روند تایم‌فریم بالاتر (Daily) صعودی نیست ({higher_structure}).")
+                                continue
+                    except Exception as e:
+                        logger.error(f"⚠️ خطا در بررسی تایم‌فریم بالاتر برای {symbol}: {e}")
+                        continue
+
                     if open_positions_count >= MAX_OPEN_POSITIONS:
                         color_code = PINK
                         logger.warning(f"{color_code}⚠️ سیگنال خرید {symbol} رد شد. سقف پوزیشن‌های باز ({MAX_OPEN_POSITIONS}) پر است.")
