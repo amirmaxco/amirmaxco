@@ -1,4 +1,3 @@
-
 import time
 import ccxt
 import pandas as pd
@@ -74,7 +73,7 @@ RESET = "\033[0m"
 PINK="\033[95m"
 
 
-def detect_swing_points(df, window=3):
+def detect_swing_points(df, window=2):
     """
     تشخیص قله‌ها و کف‌های محلی (Swing High/Low)
     window: تعداد کندل قبل و بعد که باید کمتر/بیشتر باشن تا یه نقطه به‌عنوان swing تایید بشه
@@ -99,7 +98,7 @@ def detect_swing_points(df, window=3):
     return df
 
 
-def detect_market_structure(df, window=3):
+def detect_market_structure(df, window=2):
     """
     بر اساس آخرین دو Swing High و دو Swing Low، ساختار روند رو مشخص می‌کنه
     خروجی: 'bullish' (HH+HL), 'bearish' (LH+LL), یا 'neutral' (نامشخص)
@@ -328,26 +327,151 @@ def send_beautiful_email(subject, title, type_color, rows_data):
     except Exception as e:
         logger.error(f"⚠️ خطا در ارسال ایمیل: {e}")
 
-def get_nobitex_data( symbol, timeframe='1h', limit=300):
-    # تبدیل رشته به عدد (بسیار مهم برای API نوبیتکس)
-    tf_map = {'15m': 15, '1h': 60, '4h': 240, '1d': 1440}
-    timeframe = tf_map.get(timeframe, 60)  # اگر تایم‌فریم ناشناخته بود، 60 دقیقه فرض کن
+def get_nobitex_data(symbol, timeframe='1h', limit=300):
+    """
+    دریافت OHLCV از Nobitex UDF
 
-    src = symbol.split('/')[0].lower()
-    dst = symbol.split('/')[1].lower()
+    تایم‌فریم‌های پشتیبانی‌شده:
+        15m -> 15
+        1h  -> 60
+        4h  -> 240
+        1d  -> D
 
-    url = f"https://apiv2.nobitex.ir/market/udf/history"
-    params = {
-        "symbol": f"{src.upper()}{dst.upper()}",
-        "resolution": timeframe,  # از مقدارِ عددی استفاده کن
-        "from": int(time.time()) - (limit * timeframe * 60),  # از resolution استفاده کن
-        "to": int(time.time())
+    Daily با resolution='D' دریافت می‌شود.
+    """
+
+    tf_map = {
+        '15m': '15',
+        '1h': '60',
+        '4h': '240',
+        '1d': 'D'
     }
 
-    response = requests.get(url, params=params)
-    data = response.json()
+    resolution = tf_map.get(timeframe)
 
-    if data.get('s') == 'ok':
+    if resolution is None:
+        logger.error(
+            f"❌ تایم‌فریم نامعتبر: {timeframe}"
+        )
+        return None
+
+    try:
+        src, dst = symbol.split('/')
+        src = src.upper()
+        dst = dst.upper()
+    except ValueError:
+        logger.error(
+            f"❌ فرمت نماد نامعتبر: {symbol}"
+        )
+        return None
+
+    url = "https://apiv2.nobitex.ir/market/udf/history"
+
+    # محاسبه بازه زمانی
+    if resolution == 'D':
+        seconds_per_candle = 86400
+    else:
+        seconds_per_candle = int(resolution) * 60
+
+    to_timestamp = int(time.time())
+
+    from_timestamp = (
+        to_timestamp -
+        (limit * seconds_per_candle)
+    )
+
+    params = {
+        "symbol": f"{src}{dst}",
+        "resolution": resolution,
+        "from": from_timestamp,
+        "to": to_timestamp
+    }
+
+    try:
+
+        response = requests.get(
+            url,
+            params=params,
+            timeout=15
+        )
+
+        # -----------------------------
+        # خطای HTTP
+        # -----------------------------
+        if response.status_code != 200:
+
+            logger.error(
+                f"❌ خطای HTTP {response.status_code} "
+                f"در دریافت {symbol} | "
+                f"TF={timeframe} | "
+                f"resolution={resolution} | "
+                f"symbol={src}{dst}"
+            )
+
+            # اگر 400 بود، فقط این نماد رد شود
+            if response.status_code == 400:
+                logger.warning(
+                    f"⏭️ {symbol} به دلیل درخواست نامعتبر "
+                    f"از این چرخه رد شد."
+                )
+
+            return None
+
+        # -----------------------------
+        # JSON
+        # -----------------------------
+        try:
+            data = response.json()
+        except ValueError:
+
+            logger.error(
+                f"❌ پاسخ JSON نامعتبر برای "
+                f"{symbol} | TF={timeframe}"
+            )
+
+            return None
+
+        # -----------------------------
+        # وضعیت Nobitex
+        # -----------------------------
+        if data.get('s') != 'ok':
+
+            logger.warning(
+                f"⚠️ Nobitex OHLC ناموفق "
+                f"{symbol} | TF={timeframe} | "
+                f"resolution={resolution} | "
+                f"پاسخ: {data}"
+            )
+
+            return None
+
+        # -----------------------------
+        # بررسی ساختار داده
+        # -----------------------------
+        required_keys = [
+            't',
+            'o',
+            'h',
+            'l',
+            'c',
+            'v'
+        ]
+
+        if not all(
+            key in data
+            for key in required_keys
+        ):
+
+            logger.warning(
+                f"⚠️ ساختار OHLC ناقص برای "
+                f"{symbol} | TF={timeframe}"
+            )
+
+            return None
+
+        # -----------------------------
+        # ساخت DataFrame
+        # -----------------------------
         df = pd.DataFrame({
             'timestamp': data['t'],
             'open': data['o'],
@@ -356,8 +480,116 @@ def get_nobitex_data( symbol, timeframe='1h', limit=300):
             'close': data['c'],
             'volume': data['v']
         })
+
+        # -----------------------------
+        # تبدیل ستون‌ها به عدد
+        # -----------------------------
+        numeric_columns = [
+            'open',
+            'high',
+            'low',
+            'close',
+            'volume'
+        ]
+
+        for col in numeric_columns:
+            df[col] = pd.to_numeric(
+                df[col],
+                errors='coerce'
+            )
+
+        # -----------------------------
+        # حذف کندل‌های خراب
+        # -----------------------------
+        df = df.dropna(
+            subset=[
+                'open',
+                'high',
+                'low',
+                'close'
+            ]
+        )
+
+        # -----------------------------
+        # مرتب‌سازی
+        # -----------------------------
+        df = df.sort_values(
+            'timestamp'
+        ).reset_index(drop=True)
+
+        # -----------------------------
+        # بررسی تعداد کندل
+        # -----------------------------
+        if df.empty:
+
+            logger.warning(
+                f"⚠️ هیچ کندلی برای "
+                f"{symbol} | TF={timeframe} دریافت نشد."
+            )
+
+            return None
+
+        logger.info(
+            f"📥 {symbol} | "
+            f"TF={timeframe} | "
+            f"resolution={resolution} | "
+            f"کندل دریافت شد: {len(df)}"
+        )
+
         return df
-    return None
+
+    except requests.exceptions.Timeout:
+
+        logger.error(
+            f"⏱️ Timeout در دریافت "
+            f"{symbol} | TF={timeframe}"
+        )
+
+        return None
+
+    except requests.exceptions.ConnectionError as e:
+
+        logger.error(
+            f"🌐 خطای اتصال شبکه در دریافت "
+            f"{symbol} | TF={timeframe}: {e}"
+        )
+
+        return None
+
+    except requests.exceptions.RequestException as e:
+
+        logger.error(
+            f"❌ خطای شبکه در دریافت "
+            f"{symbol} | TF={timeframe}: {e}"
+        )
+
+        return None
+
+    except Exception as e:
+
+        logger.exception(
+            f"❌ خطای غیرمنتظره در دریافت "
+            f"{symbol} | TF={timeframe}: {e}"
+        )
+
+        return None
+    except requests.exceptions.RequestException as e:
+
+        logger.error(
+            f"❌ خطای شبکه در دریافت "
+            f"{symbol} | TF={timeframe}: {e}"
+        )
+
+        return None
+
+    except Exception as e:
+
+        logger.error(
+            f"❌ خطای پردازش داده "
+            f"{symbol} | TF={timeframe}: {e}"
+        )
+
+        return None
 
 
 def get_kucoin_data(symbol, timeframe, limit=300):
@@ -368,64 +600,168 @@ def get_kucoin_data(symbol, timeframe, limit=300):
         return None
 
 
-def calculate_ut_bot_2h_live(df, sensitivity=3, atr_period=14):
-    if len(df) < max(atr_period + 5, 50):
+def calculate_ut_bot_1h_live(df, sensitivity=3, atr_period=10):
+    """
+    UT Bot Alerts - منطق نزدیک به TradingView
+    تنظیمات:
+        Key Value / Sensitivity = 3
+        ATR Period = 10
+
+    نکته مهم:
+    سیگنال BUY/SELL فقط بر اساس کندل بسته‌شده معتبر است.
+    """
+
+    df = df.copy()
+
+    if len(df) < max(atr_period + 20, 50):
         df['signal'] = 'HOLD'
         df['ATR'] = 0.0
+        df['TrailingStop'] = 0.0
+        df['UT_Position'] = 0
+        df['UT_Bias'] = 'NEUTRAL'
         return df
 
-    # محاسبه ATR برای تعیین میزان نوسان و حد ضرر پویا
-    df['ATR'] = ta.volatility.average_true_range(df['high'], df['low'], df['close'], window=atr_period)
+    # =========================================================
+    # 1) ATR - همان منطق Wilder ATR که UT Bot استفاده می‌کند
+    # =========================================================
 
-    # محاسبه میانگین متحرک پایه (مثلا EMA 1 یا بر اساس Close به عنوان بیس Trailing Stop)
-    # در استراتژی‌های UT Bot معمولا از ATR Trailing Stop استفاده می‌شود
-    xATR = df['ATR'] * sensitivity
+    df['ATR'] = ta.volatility.average_true_range(
+        high=df['high'],
+        low=df['low'],
+        close=df['close'],
+        window=atr_period,
+        fillna=False
+    )
 
-    # پیاده‌سازی منطق Trailing Stop مشابه اسکریپت‌های استاندارد چارت
-    nLoss = xATR
+    # Key Value = 3
+    nLoss = sensitivity * df['ATR']
 
-    # محاسبه خط تریلینگ استاپ (Trailing Stop Line)
+    close_prices = df['close'].astype(float).values
+
     trailing_stop = [0.0] * len(df)
+    position = [0] * len(df)
     signals = ['HOLD'] * len(df)
 
-    close_prices = df['close'].values
-    high_prices = df['high'].values
-    low_prices = df['low'].values
+    # =========================================================
+    # 2) UT Bot Trailing Stop
+    # منطق اصلی UT Bot
+    # =========================================================
 
     for i in range(1, len(df)):
-        prev_ts = trailing_stop[i - 1]
-        curr_close = close_prices[i]
-        prev_close = close_prices[i - 1]
-        curr_loss = nLoss.iloc[i]
 
-        if curr_close > prev_ts and prev_close > prev_ts:
-            trailing_stop[i] = max(prev_ts, curr_close - curr_loss)
-        elif curr_close < prev_ts and prev_close < prev_ts:
-            trailing_stop[i] = min(prev_ts, curr_close + curr_loss)
-        elif curr_close > prev_ts:
-            trailing_stop[i] = curr_close - curr_loss
+        prev_stop = trailing_stop[i - 1]
+
+        current_close = close_prices[i]
+        previous_close = close_prices[i - 1]
+
+        current_loss = float(nLoss.iloc[i])
+
+        if pd.isna(current_loss) or current_loss <= 0:
+            trailing_stop[i] = prev_stop
+            position[i] = position[i - 1]
+            continue
+
+        # -----------------------------------------------------
+        # منطق اصلی xATRTrailingStop در UT Bot
+        # -----------------------------------------------------
+
+        if current_close > prev_stop and previous_close > prev_stop:
+
+            trailing_stop[i] = max(
+                prev_stop,
+                current_close - current_loss
+            )
+
+        elif current_close < prev_stop and previous_close < prev_stop:
+
+            trailing_stop[i] = min(
+                prev_stop,
+                current_close + current_loss
+            )
+
+        elif current_close > prev_stop:
+
+            trailing_stop[i] = current_close - current_loss
+
         else:
-            trailing_stop[i] = curr_close + curr_loss
 
-        # بررسی سیگنال‌های خرید و فروش بر اساس کراس قیمت و خط استاپ (مشابه چارت)
-        # کراس به سمت بالا (سیگنال Buy)
-        if close_prices[i - 1] <= trailing_stop[i - 1] and curr_close > trailing_stop[i]:
+            trailing_stop[i] = current_close + current_loss
+
+        # -----------------------------------------------------
+        # Position در UT Bot
+        # -----------------------------------------------------
+
+        if (
+            previous_close < prev_stop
+            and current_close > prev_stop
+        ):
+            position[i] = 1
+
+        elif (
+            previous_close > prev_stop
+            and current_close < prev_stop
+        ):
+            position[i] = -1
+
+        else:
+            position[i] = position[i - 1]
+
+        # -----------------------------------------------------
+        # BUY / SELL
+        #
+        # در UT Bot:
+        #
+        # BUY  = کراس Close به بالای Trailing Stop
+        # SELL = کراس Close به پایین Trailing Stop
+        # -----------------------------------------------------
+
+        if (
+            previous_close <= prev_stop
+            and current_close > trailing_stop[i]
+        ):
             signals[i] = 'BUY'
-        # کراس به سمت پایین (سیگنال Sell)
-        elif close_prices[i - 1] >= trailing_stop[i - 1] and curr_close < trailing_stop[i]:
+
+        elif (
+            previous_close >= prev_stop
+            and current_close < trailing_stop[i]
+        ):
             signals[i] = 'SELL'
+
         else:
             signals[i] = 'HOLD'
 
     df['TrailingStop'] = trailing_stop
+    df['UT_Position'] = position
     df['signal'] = signals
 
-    # اندیکاتورهای کمکی برای فیلتر حجم و تاییدیه
+    # =========================================================
+    # 3) وضعیت کلی UT Bot
+    # =========================================================
+
+    df['UT_Bias'] = 'NEUTRAL'
+
+    df.loc[
+        df['close'] > df['TrailingStop'],
+        'UT_Bias'
+    ] = 'BULLISH'
+
+    df.loc[
+        df['close'] < df['TrailingStop'],
+        'UT_Bias'
+    ] = 'BEARISH'
+
+    # =========================================================
+    # 4) اطلاعات کمکی
+    # =========================================================
+
     df['Volume_MA'] = df['volume'].rolling(window=20).mean()
-    df['RSI'] = ta.momentum.rsi(close=df['close'], window=14)
+
+    df['RSI'] = ta.momentum.rsi(
+        close=df['close'],
+        window=14
+    )
 
     return df
-
 
 def estimate_target_time(entry_price, target_price, atr_value, timeframe_hours=1):
     if entry_price <= 0 or target_price <= entry_price or atr_value <= 0:
@@ -772,9 +1108,9 @@ def monitor_market():
     symbols = [
         "BTC/USDT", "ETH/USDT", "SOL/USDT", "AVAX/USDT", "NEAR/USDT",
         "SUI/USDT", "TRX/USDT", "XRP/USDT", "ADA/USDT", "DOGE/USDT",
-        "LINK/USDT", "UNI/USDT", "LTC/USDT", "BCH/USDT", "TON/USDT",
-        "POL/USDT", "ALGO/USDT", "XLM/USDT", "HBAR/USDT", "VET/USDT",
-        "GRT/USDT", "STX/USDT", "ANKR/USDT", "HMSTR/USDT", "DOGS/USDT",
+        "LINK/USDT", "UNI/USDT", "LTC/USDT", "BCH/USDT",
+        "POL/USDT", "ALGO/USDT", "XLM/USDT", "HBAR/USDT",
+        "GRT/USDT", "ANKR/USDT", "HMSTR/USDT", "DOGS/USDT",
         "TNSR/USDT", "2Z/USDT", "RENDER/USDT", "APE/USDT", "DYDX/USDT",
         "BASED/USDT",
         "ONE/USDT", "BICO/USDT", "NOT/USDT", "KAITO/USDT", "PUMP/USDT", "BARD/USDT", "PROM/USDT", "LA/USDT", "ZAMA/USDT"
@@ -828,20 +1164,80 @@ def monitor_market():
             coin_name_lower = symbol.split('/')[0].lower()
 
             try:
-                df = get_nobitex_data(symbol, timeframe=timeframe, limit=300)
-                if df is None or df.empty or len(df) < 25:
+                # =========================================================
+                # دریافت تایم‌فریم 1H
+                # =========================================================
+
+                df = get_nobitex_data(
+                    symbol,
+                    timeframe="1h",
+                    limit=300
+                )
+
+                if df is None or df.empty or len(df) < 60:
                     continue
 
-                df = calculate_ut_bot_2h_live(df, sensitivity=3, atr_period=14)
-                market_structure = detect_market_structure(df, window=3)
+                # =========================================================
+                # UT Bot 3 / 10 روی 1H
+                # =========================================================
 
+                df = calculate_ut_bot_1h_live(
+                    df,
+                    sensitivity=3,
+                    atr_period=10
+                )
+
+                # ---------------------------------------------------------
+                # کندل آخر ممکن است هنوز در حال تشکیل باشد.
+                # بنابراین سیگنال فقط از [-2] گرفته می‌شود.
+                # ---------------------------------------------------------
 
                 live_row = df.iloc[-1]
                 signal_row = df.iloc[-2]
 
-                current_price = live_row['close']
+                current_price = float(live_row['close'])
+
                 current_signal = signal_row['signal']
-                atr_value = signal_row['ATR']
+
+                atr_value = float(signal_row['ATR'])
+
+                ut_bias_1h = signal_row['UT_Bias']
+
+                # زمان کندل سیگنال
+                signal_candle_timestamp = signal_row['timestamp']
+
+                # =========================================================
+                # دریافت تایم‌فریم Daily
+                # Daily فقط جهت اصلی بازار را مشخص می‌کند.
+                # =========================================================
+
+                df_1d = get_nobitex_data(
+                    symbol,
+                    timeframe="1d",
+                    limit=150
+                )
+
+                daily_bias = "NEUTRAL"
+
+                if df_1d is not None and not df_1d.empty and len(df_1d) >= 60:
+
+                    df_1d = calculate_ut_bot_1h_live(
+                        df_1d,
+                        sensitivity=3,
+                        atr_period=10
+                    )
+
+                    # فقط کندل بسته‌شده Daily
+                    daily_row = df_1d.iloc[-2]
+
+                    daily_bias = daily_row['UT_Bias']
+
+                else:
+                    logger.warning(
+                        f"⚠️ [{symbol}] اطلاعات Daily کافی نیست."
+                    )
+
+
 
                 nobitex_real_price = get_nobitex_live_price(coin_name_lower)
                 if nobitex_real_price is not None:
@@ -1070,30 +1466,339 @@ def monitor_market():
                                 )
 
                 # ============ صدور سیگنال خرید جدید (چندتایم‌فریمه) ============
+                # =========================================================
+                # صدور سیگنال BUY
+                #
+                # شرایط:
+                #
+                # 1. UT Bot 3/10 در 1H سیگنال BUY داده باشد
+                # 2. روند UT Bot در Daily صعودی باشد
+                # 3. سیگنال فقط از کندل بسته‌شده گرفته شده باشد
+                # =========================================================
+
                 elif current_signal == 'BUY' and position.get("signal") != "BUY":
-                    # فیلتر ساختار بازار در تایم‌فریم فعلی (1h)
-                    if market_structure != "صعودی":
+
+                    # -----------------------------------------------------
+                    # فیلتر Daily
+                    # -----------------------------------------------------
+
+                    if daily_bias != "BULLISH":
                         logger.warning(
-                            f"🚫 [{symbol}] سیگنال BUY رد شد — ساختار بازار 1h هنوز '{market_structure}' است، نه صعودی (فیلتر HH/HL).")
+                            f"🚫 [{symbol}] BUY رد شد | "
+                            f"UT Bot 1H = BUY ولی Daily = {daily_bias}"
+                        )
+
                         continue
 
-                    # فیلتر جدید: بررسی روند در تایم‌فریم بالاتر (مثلاً روزانه 1d)
-                    try:
-                        df_higher = get_nobitex_data(symbol, timeframe="1d", limit=100)
-                        if df_higher is not None and not df_higher.empty:
-                            higher_structure = detect_market_structure(df_higher, window=3)
-                            if higher_structure != "صعودی":
-                                logger.warning(
-                                    f"🚫 [{symbol}] سیگنال BUY رد شد — روند تایم‌فریم بالاتر (Daily) صعودی نیست ({higher_structure}).")
-                                continue
-                    except Exception as e:
-                        logger.error(f"⚠️ خطا در بررسی تایم‌فریم بالاتر برای {symbol}: {e}")
+                    # -----------------------------------------------------
+                    # تأیید UT Bot در 1H
+                    # -----------------------------------------------------
+
+                    if ut_bias_1h != "BULLISH":
+                        logger.warning(
+                            f"🚫 [{symbol}] BUY رد شد | "
+                            f"سیگنال 1H BUY است ولی Bias هنوز صعودی نیست."
+                        )
+
                         continue
+
+                    logger.info(
+                        f"🟢 [{symbol}] BUY تأیید شد | "
+                        f"UT Bot 1H = BUY | "
+                        f"UT Bot 1H Bias = BULLISH | "
+                        f"UT Bot 1D Bias = BULLISH | "
+                        f"UT 3/10"
+                    )
+
+                    # -----------------------------------------------------
+                    # محدودیت تعداد پوزیشن‌های باز
+                    # -----------------------------------------------------
 
                     if open_positions_count >= MAX_OPEN_POSITIONS:
                         color_code = PINK
-                        logger.warning(f"{color_code}⚠️ سیگنال خرید {symbol} رد شد. سقف پوزیشن‌های باز ({MAX_OPEN_POSITIONS}) پر است.")
+
+                        logger.warning(
+                            f"⚠️ سیگنال خرید {symbol} رد شد. "
+                            f"سقف پوزیشن‌های باز "
+                            f"({MAX_OPEN_POSITIONS}) پر است."
+                        )
+
                         continue
+
+                    # -----------------------------------------------------
+                    # دریافت قیمت تتر
+                    # -----------------------------------------------------
+
+                    dollar_price_now = get_iran_dollar_price()
+
+                    if dollar_price_now is None:
+                        logger.error(
+                            f"❌ خرید {symbol} به دلیل قطع ناگهانی شبکه "
+                            f"در لحظه دریافت قیمت تتر لغو شد."
+                        )
+
+                        continue
+
+                    dollar_price = dollar_price_now
+
+                    # -----------------------------------------------------
+                    # محاسبه Entry / Target / Stop
+                    # -----------------------------------------------------
+
+                    t_entry, t_target, t_stop = simulate_oco_trade(
+                        symbol,
+                        current_price,
+                        atr_value,
+                        dollar_price,
+                        df
+                    )
+
+                    # -----------------------------------------------------
+                    # تخمین زمان رسیدن به تارگت
+                    # -----------------------------------------------------
+
+                    result = estimate_target_time(
+                        t_entry,
+                        t_target,
+                        atr_value * dollar_price,
+                        1
+                    )
+
+                    eta_str = "نامشخص"
+
+                    if result:
+                        candles, hours, days = result
+
+                        eta_str = (
+                            f"{days:.1f} روز "
+                            f"({hours:.1f} ساعت / "
+                            f"~{candles:.1f} کندل)"
+                        )
+
+                        logger.info(
+                            f"⏳ زمان تقریبی رسیدن به تارگت برای "
+                            f"{symbol}: {eta_str}"
+                        )
+
+                    print(
+                        f"{GREEN}"
+                        f"⏳ [{symbol}] زمان تقریبی رسیدن به هدف: "
+                        f"{eta_str}"
+                        f"{RESET}"
+                    )
+
+                    # -----------------------------------------------------
+                    # محاسبه درصد سود و زیان
+                    # -----------------------------------------------------
+
+                    profit_pct = (
+                        (t_target - t_entry) / t_entry
+                        if t_entry > 0 else 0.0
+                    )
+
+                    loss_pct = (
+                        (t_entry - t_stop) / t_entry
+                        if t_entry > 0 else 0.0
+                    )
+
+                    final_target = int(
+                        price_in_toman * (1 + profit_pct)
+                    )
+
+                    final_stop = int(
+                        price_in_toman * (1 - loss_pct)
+                    )
+
+                    # -----------------------------------------------------
+                    # ثبت خرید
+                    # -----------------------------------------------------
+
+                    order_success, order_id = place_buy_order_and_notify(
+                        symbol,
+                        price_in_toman,
+                        budget_toman=BUDGET_TOMAN
+                    )
+
+                    if order_success:
+
+                        if PAPER_TRADING:
+
+                            real_quantity = (
+                                    BUDGET_TOMAN /
+                                    (price_in_toman * 1.002)
+                            )
+
+                            logger.info(
+                                f"🛡️ [Paper Trading] "
+                                f"سفارش OCO فرضی برای {symbol} ثبت شد."
+                            )
+
+                        else:
+
+                            real_quantity = 0.0
+
+                            logger.info(
+                                f"⏳ در حال استعلام دائم وضعیت "
+                                f"سفارش {order_id} از نوبیتکس..."
+                            )
+
+                            max_attempts = 60
+                            attempts = 0
+
+                            while (
+                                    real_quantity <= 0
+                                    and attempts < max_attempts
+                            ):
+
+                                attempts += 1
+
+                                real_quantity = (
+                                    get_nobitex_order_matched_amount(
+                                        order_id
+                                    )
+                                )
+
+                                if real_quantity > 0:
+                                    logger.info(
+                                        f"✅ سفارش پس از "
+                                        f"{attempts} بار تلاش "
+                                        f"کاملاً پر شد."
+                                    )
+
+                                    break
+
+                                time.sleep(2)
+
+                        if real_quantity > 0:
+
+                            if not PAPER_TRADING:
+                                logger.info(
+                                    f"📈 [تکمیل خرید واقعی] "
+                                    f"مقدار خالص معامله شده بعد کارمزد: "
+                                    f"{real_quantity:.4f}"
+                                )
+
+                                place_nobitex_oco_sell_order(
+                                    symbol,
+                                    real_quantity,
+                                    final_target,
+                                    final_stop
+                                )
+
+                            # -------------------------------------------------
+                            # ذخیره پوزیشن
+                            # -------------------------------------------------
+
+                            now_str = jdatetime.datetime.now().strftime(
+                                "%Y-%m-%d %H:%M:%S"
+                            )
+
+                            last_signals[symbol] = {
+
+                                "signal": "BUY",
+
+                                "entry_price": int(
+                                    price_in_toman * 1.002
+                                ),
+
+                                "target_price": final_target,
+
+                                "stop_price": final_stop,
+
+                                "oco_order_id":
+                                    order_id
+                                    if not PAPER_TRADING
+                                    else None,
+
+                                "updated_at": now_str,
+
+                                "target_day": eta_str,
+
+                                "trade_history":
+                                    position.get(
+                                        "trade_history",
+                                        []
+                                    )
+                            }
+
+                            save_last_signals(last_signals)
+
+                            last_nobitex_update = 0
+
+                            open_positions_count += 1
+
+                            trade_mode = (
+                                "تست فرضی (Paper)"
+                                if PAPER_TRADING
+                                else "معامله واقعی"
+                            )
+
+                            rows_data = [
+
+                                ("جفت ارز", symbol),
+
+                                ("حالت معامله", trade_mode),
+
+                                (
+                                    "قیمت ورود",
+                                    f"{int(price_in_toman * 1.002):,} تومان"
+                                ),
+
+                                (
+                                    "تارگت OCO",
+                                    f"{final_target:,} تومان"
+                                ),
+
+                                (
+                                    "استاپ OCO",
+                                    f"{final_stop:,} تومان"
+                                ),
+
+                                (
+                                    "زمان تقریبی رسیدن به هدف",
+                                    eta_str
+                                ),
+
+                                (
+                                    "مقدار خرید",
+                                    f"{real_quantity:.4f}"
+                                ),
+
+                                (
+                                    "تأیید Daily",
+                                    "UT Bot 3/10 - BULLISH"
+                                ),
+
+                                (
+                                    "سیگنال ورود",
+                                    "UT Bot 3/10 - 1H BUY"
+                                )
+                            ]
+
+                            send_beautiful_email(
+
+                                subject=(
+                                    f"🚀 سیگنال خرید "
+                                    f"{symbol} ({trade_mode})"
+                                ),
+
+                                title=(
+                                    f"خرید موفقیت‌آمیز {symbol}"
+                                ),
+
+                                type_color="#10b981",
+
+                                rows_data=rows_data
+                            )
+
+                        else:
+
+                            logger.error(
+                                f"❌ خطای بحرانی: سفارش "
+                                f"{order_id} در نوبیتکس پر نشد! "
+                                f"پوزیشن ذخیره نشد."
+                            )
+
 
                     dollar_price_now = get_iran_dollar_price()
                     if dollar_price_now is None:
