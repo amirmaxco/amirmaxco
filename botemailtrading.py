@@ -1103,6 +1103,7 @@ def minhad(symbol):
 
 def monitor_market():
     global target_day
+
     logger.info("🔥 ربات نوسان‌گیری با استراتژی چندتایم‌فریمه فعال شد...")
 
     symbols = [
@@ -1113,60 +1114,130 @@ def monitor_market():
         "GRT/USDT", "ANKR/USDT", "HMSTR/USDT", "DOGS/USDT",
         "TNSR/USDT", "2Z/USDT", "RENDER/USDT", "APE/USDT", "DYDX/USDT",
         "BASED/USDT",
-        "ONE/USDT", "BICO/USDT", "NOT/USDT", "KAITO/USDT", "PUMP/USDT", "BARD/USDT", "PROM/USDT", "LA/USDT", "ZAMA/USDT"
-        ,"HOME/USDT"
+        "ONE/USDT", "BICO/USDT", "NOT/USDT", "KAITO/USDT",
+        "PUMP/USDT", "BARD/USDT", "PROM/USDT", "LA/USDT",
+        "ZAMA/USDT", "HOME/USDT"
     ]
 
     DB_FILE = "live_signals_v2.json"
+
     last_signals = load_last_signals(symbols)
+
     last_nobitex_update = 0
     dollar_price = None
     current_wallet = 0.0
     last_report_date = None
 
     while True:
+
         current_now = datetime.now()
-        current_time_str = jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        print(f"\n🔄 --- چرخه پایش آنی بازار (چندتایم‌فریمه): {current_time_str} ---")
+        current_time_str = jdatetime.datetime.now().strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
 
-        if current_now.hour == 0 and current_now.minute == 0 and last_report_date != current_now.date():
+        print(
+            f"\n🔄 --- چرخه پایش آنی بازار "
+            f"(چندتایم‌فریمه): {current_time_str} ---"
+        )
+
+        # ============================================================
+        # گزارش روزانه
+        # ============================================================
+
+        if (
+            current_now.hour == 0
+            and current_now.minute == 0
+            and last_report_date != current_now.date()
+        ):
             try:
                 generate_daily_report(file_path=DB_FILE)
+
             except Exception as e:
-                logger.error(f"⚠️ خطا در تولید گزارش روزانه: {e}")
+                logger.error(
+                    f"⚠️ خطا در تولید گزارش روزانه: {e}"
+                )
+
             last_report_date = current_now.date()
 
+        # ============================================================
+        # بروزرسانی قیمت تتر و موجودی
+        # ============================================================
+
         current_timestamp = time.time()
-        if current_timestamp - last_nobitex_update > 600 or dollar_price is None:
-            logger.info("🔄 در حال به‌روزرسانی اطلاعات عمومی از نوبیتکس (قیمت تتر و موجودی)...")
+
+        if (
+            current_timestamp - last_nobitex_update > 600
+            or dollar_price is None
+        ):
+
+            logger.info(
+                "🔄 در حال به‌روزرسانی اطلاعات عمومی "
+                "از نوبیتکس (قیمت تتر و موجودی)..."
+            )
+
             dollar_price = get_iran_dollar_price()
+
             current_wallet = get_nobitex_wallet_balance()
+
             update_drawdown_performance(current_wallet)
+
             last_nobitex_update = current_timestamp
 
+        # ============================================================
+        # اگر قیمت تتر نداریم، چرخه رد شود
+        # ============================================================
+
         if dollar_price is None:
-            logger.warning("⚠️ به دلیل عدم دسترسی به قیمت زنده تتر، این چرخه معاملاتی رد می‌شود.")
+
+            logger.warning(
+                "⚠️ به دلیل عدم دسترسی به قیمت زنده تتر، "
+                "این چرخه معاملاتی رد می‌شود."
+            )
+
             print("💤 استراحت ۶۰ ثانیه‌ای تا چرخه بعدی...")
+
             time.sleep(60)
+
             continue
 
-        print(f"  قیمت دلار (تومان): {dollar_price:,}  موجودی حساب شما : {current_wallet:.2f}")
-        print("---------------------------------------------------------------------------------")
+        print(
+            f"  قیمت دلار (تومان): {dollar_price:,} "
+            f" موجودی حساب شما : {current_wallet:.2f}"
+        )
+
+        print(
+            "---------------------------------------------------------------------------------"
+        )
+
+        # ============================================================
+        # محاسبه تعداد پوزیشن‌های باز
+        # ============================================================
+
         open_positions_count = sum(
-            1 for sym in symbols
-            if isinstance(last_signals.get(sym), dict) and last_signals[sym].get("signal") == "BUY"
+            1
+            for sym in symbols
+            if (
+                isinstance(last_signals.get(sym), dict)
+                and last_signals[sym].get("signal") == "BUY"
+            )
         )
 
         log_lines_buffer = []
 
+        # ============================================================
+        # شروع بررسی ارزها
+        # ============================================================
+
         for symbol in symbols:
-            coin_name_lower = symbol.split('/')[0].lower()
+
+            coin_name_lower = symbol.split("/")[0].lower()
 
             try:
-                # =========================================================
-                # دریافت تایم‌فریم 1H
-                # =========================================================
+
+                # ====================================================
+                # دریافت 1H
+                # ====================================================
 
                 df = get_nobitex_data(
                     symbol,
@@ -1174,12 +1245,16 @@ def monitor_market():
                     limit=300
                 )
 
-                if df is None or df.empty or len(df) < 60:
+                if (
+                    df is None
+                    or df.empty
+                    or len(df) < 60
+                ):
                     continue
 
-                # =========================================================
-                # UT Bot 3 / 10 روی 1H
-                # =========================================================
+                # ====================================================
+                # UT BOT 3/10 روی 1H
+                # ====================================================
 
                 df = calculate_ut_bot_1h_live(
                     df,
@@ -1187,29 +1262,42 @@ def monitor_market():
                     atr_period=10
                 )
 
-                # ---------------------------------------------------------
-                # کندل آخر ممکن است هنوز در حال تشکیل باشد.
-                # بنابراین سیگنال فقط از [-2] گرفته می‌شود.
-                # ---------------------------------------------------------
+                # ====================================================
+                # کندل بسته‌شده
+                #
+                # [-1] = کندل در حال تشکیل
+                # [-2] = آخرین کندل کاملاً بسته‌شده
+                # ====================================================
 
                 live_row = df.iloc[-1]
+
                 signal_row = df.iloc[-2]
 
-                current_price = float(live_row['close'])
+                current_price = float(
+                    live_row["close"]
+                )
 
-                current_signal = signal_row['signal']
+                current_signal = signal_row["signal"]
 
-                atr_value = float(signal_row['ATR'])
+                atr_value = float(
+                    signal_row["ATR"]
+                )
 
-                ut_bias_1h = signal_row['UT_Bias']
+                ut_bias_1h = signal_row["UT_Bias"]
 
-                # زمان کندل سیگنال
-                signal_candle_timestamp = signal_row['timestamp']
+                signal_candle_timestamp = signal_row["timestamp"]
 
-                # =========================================================
-                # دریافت تایم‌فریم Daily
-                # Daily فقط جهت اصلی بازار را مشخص می‌کند.
-                # =========================================================
+                # تبدیل زمان سیگنال به رشته قابل ذخیره
+                try:
+                    signal_time_str = str(
+                        signal_candle_timestamp
+                    )
+                except Exception:
+                    signal_time_str = "نامشخص"
+
+                # ====================================================
+                # دریافت Daily
+                # ====================================================
 
                 df_1d = get_nobitex_data(
                     symbol,
@@ -1219,7 +1307,11 @@ def monitor_market():
 
                 daily_bias = "NEUTRAL"
 
-                if df_1d is not None and not df_1d.empty and len(df_1d) >= 60:
+                if (
+                    df_1d is not None
+                    and not df_1d.empty
+                    and len(df_1d) >= 60
+                ):
 
                     df_1d = calculate_ut_bot_1h_live(
                         df_1d,
@@ -1227,280 +1319,1096 @@ def monitor_market():
                         atr_period=10
                     )
 
-                    # فقط کندل بسته‌شده Daily
                     daily_row = df_1d.iloc[-2]
 
-                    daily_bias = daily_row['UT_Bias']
+                    daily_bias = daily_row["UT_Bias"]
 
                 else:
+
                     logger.warning(
                         f"⚠️ [{symbol}] اطلاعات Daily کافی نیست."
                     )
 
+                # ====================================================
+                # قیمت واقعی نوبیتکس
+                # ====================================================
 
+                nobitex_real_price = get_nobitex_live_price(
+                    coin_name_lower
+                )
 
-                nobitex_real_price = get_nobitex_live_price(coin_name_lower)
                 if nobitex_real_price is not None:
-                    price_in_toman = nobitex_real_price
-                elif current_price is not None and dollar_price is not None:
-                    price_in_toman = current_price * dollar_price
+
+                    price_in_toman = float(
+                        nobitex_real_price
+                    )
+
+                elif (
+                    current_price is not None
+                    and dollar_price is not None
+                ):
+
+                    price_in_toman = (
+                        current_price * dollar_price
+                    )
+
                 else:
-                    logger.warning(f"⚠️ قیمت معتبر برای {symbol} در دسترس نیست، این نماد رد شد.")
+
+                    logger.warning(
+                        f"⚠️ قیمت معتبر برای {symbol} "
+                        f"در دسترس نیست، این نماد رد شد."
+                    )
+
                     continue
 
-                toman_str = f"{price_in_toman:,.2f}" if price_in_toman < 100 else f"{int(price_in_toman):,}"
+                # ====================================================
+                # فرمت قیمت
+                # ====================================================
+
+                if price_in_toman < 100:
+                    toman_str = f"{price_in_toman:,.2f}"
+                else:
+                    toman_str = f"{int(price_in_toman):,}"
+
+                # ====================================================
+                # دریافت پوزیشن
+                # ====================================================
 
                 position = last_signals.get(symbol)
 
                 if not isinstance(position, dict):
+
                     position = {
-                        "signal": "HOLD", "entry_price": 0.0, "target_price": 0.0, "stop_price": 0.0,
-                        "oco_order_id": None, "updated_at": current_time_str, "target_day": 0.0, "trade_history": []
+                        "signal": "HOLD",
+                        "entry_price": 0.0,
+                        "target_price": 0.0,
+                        "stop_price": 0.0,
+                        "oco_order_id": None,
+                        "updated_at": current_time_str,
+                        "signal_time": None,
+                        "target_day": 0.0,
+                        "trade_history": []
                     }
+
                     last_signals[symbol] = position
 
-                color_code = BLUE
-                status_display = "HOLD"
-                position_details = " | تعداد: -        | هدف: -          | استاپ: -         | سود/زیان: -"
-                maxprice = maxhad(coin_name_lower)
-                minprice = minhad(coin_name_lower)
+                # ====================================================
+                # مقدار پیش‌فرض target_day
+                #
+                # مهم:
+                # دیگر مقدار target_day ارز قبلی به این ارز منتقل نمی‌شود
+                # ====================================================
 
-                if position.get("signal") == 'BUY':
+                target_day = position.get(
+                    "target_day",
+                    0.0
+                )
+
+                # ====================================================
+                # وضعیت نمایشی
+                # ====================================================
+
+                color_code = BLUE
+
+                status_display = "HOLD"
+
+                position_details = (
+                    " | تعداد: -        "
+                    "| هدف: -          "
+                    "| استاپ: -         "
+                    "| سود/زیان: -"
+                )
+
+                # ====================================================
+                # اگر پوزیشن BUY داریم
+                # ====================================================
+
+                if position.get("signal") == "BUY":
+
                     color_code = GREEN
+
                     status_display = "BUY (OCO active)"
 
-                    p_entry = position.get("entry_price", 0)
-                    p_target = position.get("target_price", 0)
-                    p_stop = position.get("stop_price", 0)
-                    target_day = position.get("target_day", 0)
+                    p_entry = float(
+                        position.get(
+                            "entry_price",
+                            0
+                        ) or 0
+                    )
 
-                    calc_qty = BUDGET_TOMAN / p_entry if p_entry > 0 else 0.0
-                    potential_profit = (p_target - p_entry) * calc_qty if p_entry > 0 else 0.0
-                    potential_loss = (p_entry - p_stop) * calc_qty if p_entry > 0 else 0.0
+                    p_target = float(
+                        position.get(
+                            "target_price",
+                            0
+                        ) or 0
+                    )
+
+                    p_stop = float(
+                        position.get(
+                            "stop_price",
+                            0
+                        ) or 0
+                    )
+
+                    target_day = position.get(
+                        "target_day",
+                        0.0
+                    )
+
+                    calc_qty = (
+                        BUDGET_TOMAN / p_entry
+                        if p_entry > 0
+                        else 0.0
+                    )
+
+                    potential_profit = (
+                        (p_target - p_entry)
+                        * calc_qty
+                        if p_entry > 0
+                        else 0.0
+                    )
+
+                    potential_loss = (
+                        (p_entry - p_stop)
+                        * calc_qty
+                        if p_entry > 0
+                        else 0.0
+                    )
 
                     position_details = (
                         f" | تعداد: {calc_qty:<8.3f}"
                         f" | هدف: {p_target:<10,}"
                         f" | استاپ: {p_stop:<10,}"
-                        f" | سود احتمالی: +{int(potential_profit):,} تومان "
+                        f" | سود احتمالی: +{int(potential_profit):,} تومان"
                         f" | زیان احتمالی: -{int(potential_loss):,} تومان"
-                        f"| بازه زمانی رسیده به هدف : {target_day}"
+                        f" | بازه زمانی رسیدن به هدف: {target_day}"
                     )
-                elif current_signal == 'SELL':
+
+                # ====================================================
+                # SELL signal
+                # ====================================================
+
+                elif current_signal == "SELL":
+
                     color_code = RED
+
                     status_display = "SELL"
 
-                plain_log_line = f"📊 {symbol:<10} | قیمت: {toman_str:<10} تومان | وضعیت: {status_display:<18}{position_details} | زمان: {current_time_str}  زمان تقریبی رسیدن به قیمت هدف : {target_day}"
-                log_lines_buffer.append(plain_log_line)
+                # ====================================================
+                # لاگ اولیه
+                # ====================================================
 
-                clean_console_line = f"📊 {symbol:<10} | قیمت: {toman_str:<10} تومان | وضعیت: {status_display:<18}{position_details}"
-                print(f"{color_code}{clean_console_line}{RESET}")
-                print(f"{color_code}{'-' * 84}{RESET}")
+                clean_console_line = (
+                    f"📊 {symbol:<10} "
+                    f"| قیمت: {toman_str:<10} تومان "
+                    f"| وضعیت: {status_display:<18}"
+                    f"{position_details}"
+                )
 
-                # ============ مدیریت خروج پوزیشن باز ============
-                if position.get("signal") == 'BUY':
-                    entry_time_str = position.get("updated_at", "نامشخص")
-                    hours_held = get_hours_since_entry(entry_time_str) if entry_time_str != "نامشخص" else 0
+                print(
+                    f"{color_code}"
+                    f"{clean_console_line}"
+                    f"{RESET}"
+                )
+
+                print(
+                    f"{color_code}"
+                    f"{'-' * 84}"
+                    f"{RESET}"
+                )
+
+                log_lines_buffer.append(
+                    f"{clean_console_line} "
+                    f"| زمان: {current_time_str}"
+                )
+
+                # ====================================================
+                # مدیریت پوزیشن BUY
+                # ====================================================
+
+                if position.get("signal") == "BUY":
+
+                    entry_time_str = position.get(
+                        "updated_at",
+                        "نامشخص"
+                    )
+
+                    hours_held = (
+                        get_hours_since_entry(
+                            entry_time_str
+                        )
+                        if entry_time_str != "نامشخص"
+                        else 0
+                    )
+
+                    # =================================================
+                    # 1. خروج زمانی
+                    # =================================================
 
                     if hours_held >= MAX_HOLD_HOURS:
+
                         logger.warning(
-                            f"⏰ [{symbol}] بیش از {MAX_HOLD_HOURS:.0f} ساعت بدون رسیدن به هدف/استاپ سپری شد. خروج به دلیل انقضای زمان.")
+                            f"⏰ [{symbol}] بیش از "
+                            f"{MAX_HOLD_HOURS:.0f} ساعت بدون رسیدن "
+                            f"به هدف/استاپ سپری شد. "
+                            f"خروج به دلیل انقضای زمان."
+                        )
+
+                        # ---------------------------------------------
+                        # Paper
+                        # ---------------------------------------------
 
                         if PAPER_TRADING:
-                            simulate_sell_trade(symbol, current_price, dollar_price, reason="Time Exit (Paper)")
 
-                        now_str = jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        pnl_toman = int(price_in_toman - position.get("entry_price", 0.0))
+                            simulate_sell_trade(
+                                symbol,
+                                current_price,
+                                dollar_price,
+                                reason="Time Exit (Paper)"
+                            )
+
+                        now_str = jdatetime.datetime.now().strftime(
+                            "%Y-%m-%d %H:%M:%S"
+                        )
+
+                        exit_price = int(
+                            price_in_toman
+                        )
+
+                        entry_price = int(
+                            position.get(
+                                "entry_price",
+                                0
+                            )
+                        )
+
+                        pnl_toman = (
+                            exit_price - entry_price
+                        )
 
                         past_trade = {
-                            "type": "PAPER_TRADE" if PAPER_TRADING else "REAL_TIME_EXIT",
-                            "entry_time": position.get("updated_at", "نامشخص"),
+                            "type": (
+                                "PAPER_TRADE"
+                                if PAPER_TRADING
+                                else "REAL_TIME_EXIT"
+                            ),
+                            "entry_time": position.get(
+                                "updated_at",
+                                "نامشخص"
+                            ),
+                            "signal_time": position.get(
+                                "signal_time",
+                                "نامشخص"
+                            ),
                             "exit_time": now_str,
-                            "entry_price": position.get("entry_price", 0.0),
-                            "exit_price": int(price_in_toman),
-                            "target_day": position.get("target_day"),
-                            "reason": "Time Exit - رسیدن به سقف زمانی نگهداری"
+                            "entry_price": entry_price,
+                            "exit_price": exit_price,
+                            "target_day": position.get(
+                                "target_day"
+                            ),
+                            "reason": (
+                                "Time Exit - "
+                                "رسیدن به سقف زمانی نگهداری"
+                            )
                         }
 
                         time_exit_rows_data = [
+
                             ("جفت ارز", symbol),
-                            ("قیمت ورود", f"{int(position.get('entry_price', 0)):,} تومان"),
-                            ("قیمت خروج (پایان زمان)", f"{int(price_in_toman):,} تومان"),
-                            ("سود/زیان تقریبی هر واحد", f"{pnl_toman:,} تومان"),
-                            ("مدت نگهداری", f"{hours_held:.1f} ساعت"),
-                            ("زمان ورود", position.get("updated_at", "نامشخص")),
-                            ("زمان خروج", now_str),
+
+                            (
+                                "قیمت ورود",
+                                f"{entry_price:,} تومان"
+                            ),
+
+                            (
+                                "قیمت خروج",
+                                f"{exit_price:,} تومان"
+                            ),
+
+                            (
+                                "سود/زیان تقریبی هر واحد",
+                                f"{pnl_toman:,} تومان"
+                            ),
+
+                            (
+                                "مدت نگهداری",
+                                f"{hours_held:.1f} ساعت"
+                            ),
+
+                            (
+                                "زمان سیگنال",
+                                position.get(
+                                    "signal_time",
+                                    "نامشخص"
+                                )
+                            ),
+
+                            (
+                                "زمان ورود",
+                                position.get(
+                                    "updated_at",
+                                    "نامشخص"
+                                )
+                            ),
+
+                            (
+                                "زمان خروج",
+                                now_str
+                            )
                         ]
 
                         last_signals[symbol] = {
-                            "signal": "HOLD", "entry_price": 0.0, "target_price": 0.0, "stop_price": 0.0,
-                            "oco_order_id": None, "updated_at": now_str, "target_day": position.get("target_day"),
-                            "trade_history": position.get("trade_history", []) + [past_trade]
+
+                            "signal": "HOLD",
+
+                            "entry_price": 0.0,
+
+                            "target_price": 0.0,
+
+                            "stop_price": 0.0,
+
+                            "oco_order_id": None,
+
+                            "updated_at": now_str,
+
+                            "signal_time": None,
+
+                            "target_day": 0.0,
+
+                            "trade_history":
+                                position.get(
+                                    "trade_history",
+                                    []
+                                ) + [past_trade]
                         }
-                        save_last_signals(last_signals)
+
+                        save_last_signals(
+                            last_signals
+                        )
+
+                        open_positions_count = max(
+                            0,
+                            open_positions_count - 1
+                        )
 
                         send_beautiful_email(
-                            subject=f"⏰ [خروج زمانی] {symbol} پس از {hours_held:.1f} ساعت بدون رسیدن به هدف/استاپ بسته شد.",
-                            title=f"خروج به دلیل انقضای زمان برای {symbol}",
+
+                            subject=(
+                                f"⏰ [خروج زمانی] "
+                                f"{symbol} پس از "
+                                f"{hours_held:.1f} ساعت "
+                                f"بسته شد."
+                            ),
+
+                            title=(
+                                f"خروج به دلیل انقضای "
+                                f"زمان برای {symbol}"
+                            ),
+
                             type_color="#f59e0b",
+
                             rows_data=time_exit_rows_data
                         )
+
+                        # بسیار مهم:
+                        # بعد از خروج، این ارز در همین چرخه
+                        # دیگر نباید مجدداً BUY شود.
                         continue
 
+                    # =================================================
+                    # 2. Stop Loss - Paper
+                    #
+                    # مهم:
+                    # minhad() کاملاً حذف شد.
+                    #
+                    # فقط قیمت فعلی بررسی می‌شود.
+                    # =================================================
+
                     if PAPER_TRADING:
-                        if price_in_toman <= position["stop_price"] or (minprice is not None and float(minprice) <= position["stop_price"]):
-                            logger.warning(f"📉 حد ضرر فرضی برای {symbol} در قیمت {price_in_toman:,} تومان لمس شد.")
-                            simulate_sell_trade(symbol, current_price, dollar_price, reason="Stop Loss (Paper)")
-                            now_str = jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+                        if (
+                            p_stop > 0
+                            and price_in_toman <= p_stop
+                        ):
+
+                            logger.warning(
+                                f"📉 حد ضرر فرضی برای {symbol} "
+                                f"در قیمت "
+                                f"{price_in_toman:,.0f} تومان "
+                                f"لمس شد."
+                            )
+
+                            # قیمت استفاده‌شده برای خروج
+                            # همان قیمت واقعی نوبیتکس است.
+                            exit_price_toman = price_in_toman
+
+                            simulate_sell_trade(
+                                symbol,
+                                current_price,
+                                dollar_price,
+                                reason="Stop Loss (Paper)"
+                            )
+
+                            logger.warning(
+                                f"📉 [خروج فرضی] "
+                                f"ماشۀ خروج برای {symbol} "
+                                f"چکانده شد! "
+                                f"قیمت خروج: "
+                                f"{exit_price_toman:,.0f} تومان "
+                                f"| دلیل: Stop Loss (Paper)"
+                            )
+
+                            now_str = (
+                                jdatetime.datetime.now()
+                                .strftime(
+                                    "%Y-%m-%d %H:%M:%S"
+                                )
+                            )
+
+                            entry_price = int(
+                                position.get(
+                                    "entry_price",
+                                    0
+                                )
+                            )
+
+                            exit_price = int(
+                                exit_price_toman
+                            )
+
+                            pnl_toman = (
+                                exit_price
+                                - entry_price
+                            )
+
                             past_trade = {
-                                "type": "PAPER_TRADE", "entry_time": position.get("updated_at", "نامشخص"),
-                                "exit_time": now_str, "entry_price": position.get("entry_price", 0.0),
-                                "exit_price": int(price_in_toman), "target_day": position.get("target_day"),
-                                "reason": "Stop Loss (Paper)"
+
+                                "type": "PAPER_TRADE",
+
+                                "entry_time":
+                                    position.get(
+                                        "updated_at",
+                                        "نامشخص"
+                                    ),
+
+                                "signal_time":
+                                    position.get(
+                                        "signal_time",
+                                        "نامشخص"
+                                    ),
+
+                                "exit_time":
+                                    now_str,
+
+                                "entry_price":
+                                    entry_price,
+
+                                "exit_price":
+                                    exit_price,
+
+                                "target_day":
+                                    position.get(
+                                        "target_day"
+                                    ),
+
+                                "reason":
+                                    "Stop Loss (Paper)"
                             }
 
-                            pnl_toman = int(price_in_toman - position.get("entry_price", 0.0))
                             stop_rows_data = [
+
                                 ("جفت ارز", symbol),
-                                ("قیمت ورود", f"{int(position.get('entry_price', 0)):,} تومان"),
-                                ("قیمت خروج (استاپ)", f"{int(price_in_toman):,} تومان"),
-                                ("زیان تقریبی هر واحد", f"{pnl_toman:,} تومان"),
-                                ("زمان ورود", position.get("updated_at", "نامشخص")),
-                                ("زمان خروج", now_str),
+
+                                (
+                                    "قیمت ورود",
+                                    f"{entry_price:,} تومان"
+                                ),
+
+                                (
+                                    "قیمت استاپ",
+                                    f"{int(p_stop):,} تومان"
+                                ),
+
+                                (
+                                    "قیمت خروج",
+                                    f"{exit_price:,} تومان"
+                                ),
+
+                                (
+                                    "سود/زیان تقریبی هر واحد",
+                                    f"{pnl_toman:,} تومان"
+                                ),
+
+                                (
+                                    "زمان سیگنال",
+                                    position.get(
+                                        "signal_time",
+                                        "نامشخص"
+                                    )
+                                ),
+
+                                (
+                                    "زمان ورود",
+                                    position.get(
+                                        "updated_at",
+                                        "نامشخص"
+                                    )
+                                ),
+
+                                (
+                                    "زمان خروج",
+                                    now_str
+                                )
                             ]
 
                             last_signals[symbol] = {
-                                "signal": "HOLD", "entry_price": 0.0, "target_price": 0.0, "stop_price": 0.0,
-                                "oco_order_id": None, "updated_at": now_str, "target_day": position.get("target_day"),
-                                "trade_history": position.get("trade_history", []) + [past_trade]
+
+                                "signal": "HOLD",
+
+                                "entry_price": 0.0,
+
+                                "target_price": 0.0,
+
+                                "stop_price": 0.0,
+
+                                "oco_order_id": None,
+
+                                "updated_at": now_str,
+
+                                "signal_time": None,
+
+                                "target_day": 0.0,
+
+                                "trade_history":
+                                    position.get(
+                                        "trade_history",
+                                        []
+                                    ) + [past_trade]
                             }
-                            save_last_signals(last_signals)
+
+                            save_last_signals(
+                                last_signals
+                            )
+
+                            open_positions_count = max(
+                                0,
+                                open_positions_count - 1
+                            )
 
                             send_beautiful_email(
-                                subject=f"📉 حد ضرر فرضی برای {symbol} در قیمت {price_in_toman:,} تومان لمس شد.",
-                                title=f"حد ضرر فرضی برای {symbol}",
+
+                                subject=(
+                                    f"📉 حد ضرر فرضی برای "
+                                    f"{symbol} "
+                                    f"در قیمت "
+                                    f"{exit_price:,} تومان "
+                                    f"لمس شد."
+                                ),
+
+                                title=(
+                                    f"حد ضرر فرضی برای "
+                                    f"{symbol}"
+                                ),
+
                                 type_color="#ef4444",
-                                rows_data=stop_rows_data
+
+                                rows_data=
+                                    stop_rows_data
                             )
 
-                        elif price_in_toman >= position["target_price"] or (maxprice is not None and float(maxprice) >= position["target_price"]) :
-                            logger.info(f"🎯 حد سود فرضی برای {symbol} در قیمت {price_in_toman:,} تومان لمس شد.")
-                            simulate_sell_trade(symbol, current_price, dollar_price, reason="Take Profit (Paper)")
-                            now_str = jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            # مهم:
+                            # جلوگیری از ورود مجدد در همین چرخه
+                            continue
+
+                        # =================================================
+                        # 3. Take Profit - Paper
+                        # =================================================
+
+                        if (
+                            p_target > 0
+                            and price_in_toman >= p_target
+                        ):
+
+                            logger.info(
+                                f"🎯 حد سود فرضی برای {symbol} "
+                                f"در قیمت "
+                                f"{price_in_toman:,.0f} تومان "
+                                f"لمس شد."
+                            )
+
+                            exit_price_toman = price_in_toman
+
+                            simulate_sell_trade(
+                                symbol,
+                                current_price,
+                                dollar_price,
+                                reason="Take Profit (Paper)"
+                            )
+
+                            logger.info(
+                                f"🎯 [خروج فرضی] "
+                                f"{symbol} بسته شد. "
+                                f"قیمت خروج: "
+                                f"{exit_price_toman:,.0f} تومان"
+                            )
+
+                            now_str = (
+                                jdatetime.datetime.now()
+                                .strftime(
+                                    "%Y-%m-%d %H:%M:%S"
+                                )
+                            )
+
+                            entry_price = int(
+                                position.get(
+                                    "entry_price",
+                                    0
+                                )
+                            )
+
+                            exit_price = int(
+                                exit_price_toman
+                            )
+
+                            pnl_toman = (
+                                exit_price
+                                - entry_price
+                            )
+
                             past_trade = {
-                                "type": "PAPER_TRADE", "entry_time": position.get("updated_at", "نامشخص"),
-                                "exit_time": now_str, "entry_price": position.get("entry_price", 0.0), "target_day": position.get("target_day"),
-                                "exit_price": int(price_in_toman), "reason": "Take Profit (Paper)"
+
+                                "type": "PAPER_TRADE",
+
+                                "entry_time":
+                                    position.get(
+                                        "updated_at",
+                                        "نامشخص"
+                                    ),
+
+                                "signal_time":
+                                    position.get(
+                                        "signal_time",
+                                        "نامشخص"
+                                    ),
+
+                                "exit_time":
+                                    now_str,
+
+                                "entry_price":
+                                    entry_price,
+
+                                "exit_price":
+                                    exit_price,
+
+                                "target_day":
+                                    position.get(
+                                        "target_day"
+                                    ),
+
+                                "reason":
+                                    "Take Profit (Paper)"
                             }
 
-                            pnl_toman = int(price_in_toman - position.get("entry_price", 0.0))
                             target_rows_data = [
+
                                 ("جفت ارز", symbol),
-                                ("قیمت ورود", f"{int(position.get('entry_price', 0)):,} تومان"),
-                                ("قیمت خروج (تارگت)", f"{int(price_in_toman):,} تومان"),
-                                ("سود تقریبی هر واحد", f"{pnl_toman:,} تومان"),
-                                ("زمان ورود", position.get("updated_at", "نامشخص")),
-                                ("زمان خروج", now_str),
+
+                                (
+                                    "قیمت ورود",
+                                    f"{entry_price:,} تومان"
+                                ),
+
+                                (
+                                    "قیمت تارگت",
+                                    f"{int(p_target):,} تومان"
+                                ),
+
+                                (
+                                    "قیمت خروج",
+                                    f"{exit_price:,} تومان"
+                                ),
+
+                                (
+                                    "سود/زیان تقریبی هر واحد",
+                                    f"{pnl_toman:,} تومان"
+                                ),
+
+                                (
+                                    "زمان سیگنال",
+                                    position.get(
+                                        "signal_time",
+                                        "نامشخص"
+                                    )
+                                ),
+
+                                (
+                                    "زمان ورود",
+                                    position.get(
+                                        "updated_at",
+                                        "نامشخص"
+                                    )
+                                ),
+
+                                (
+                                    "زمان خروج",
+                                    now_str
+                                )
                             ]
 
                             last_signals[symbol] = {
-                                "signal": "HOLD", "entry_price": 0.0, "target_price": 0.0, "stop_price": 0.0,
-                                "oco_order_id": None, "updated_at": now_str, "target_day": position.get("target_day"),
-                                "trade_history": position.get("trade_history", []) + [past_trade]
+
+                                "signal": "HOLD",
+
+                                "entry_price": 0.0,
+
+                                "target_price": 0.0,
+
+                                "stop_price": 0.0,
+
+                                "oco_order_id": None,
+
+                                "updated_at": now_str,
+
+                                "signal_time": None,
+
+                                "target_day": 0.0,
+
+                                "trade_history":
+                                    position.get(
+                                        "trade_history",
+                                        []
+                                    ) + [past_trade]
                             }
-                            save_last_signals(last_signals)
+
+                            save_last_signals(
+                                last_signals
+                            )
+
+                            open_positions_count = max(
+                                0,
+                                open_positions_count - 1
+                            )
 
                             send_beautiful_email(
-                                subject=f"🎯 حد سود فرضی برای {symbol} در قیمت {price_in_toman:,} تومان لمس شد.",
-                                title=f"حد سود فرضی برای {symbol}",
-                                type_color="#10b981",
-                                rows_data=target_rows_data
-                            )
-                    else:
-                        url_wallet = "https://apiv2.nobitex.ir/v2/wallets"
-                        headers = {"Authorization": f"Token {NOBITEX_TOKEN_PUBLIC}", "Content-Type": "application/json"}
-                        res_w = _send_request_with_retry("POST", url_wallet, headers=headers, json_data={})
-                        if res_w and res_w.get("status") == "ok":
-                            wallets = res_w.get("wallets", {}) or {}
-                            wallet_entry = wallets.get(coin_name_lower.upper()) or {}
-                            coin_balance = float(wallet_entry.get("balance", 0.0))
 
-                            entry_price = position.get("entry_price") or 1
-                            if coin_balance < (BUDGET_TOMAN / entry_price) * 0.05:
-                                logger.info(f"🎉 [خروج موفق OCO] اردر OCO ارز {symbol} در صرافی با موفقیت اجرا و بسته شد.")
-                                now_str = jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                subject=(
+                                    f"🎯 حد سود فرضی برای "
+                                    f"{symbol} "
+                                    f"در قیمت "
+                                    f"{exit_price:,} تومان "
+                                    f"لمس شد."
+                                ),
+
+                                title=(
+                                    f"حد سود فرضی برای "
+                                    f"{symbol}"
+                                ),
+
+                                type_color="#10b981",
+
+                                rows_data=
+                                    target_rows_data
+                            )
+
+                            # جلوگیری از BUY مجدد
+                            # در همین چرخه
+                            continue
+
+                    # =================================================
+                    # 4. مدیریت OCO واقعی
+                    # =================================================
+
+                    else:
+
+                        url_wallet = (
+                            "https://apiv2.nobitex.ir/v2/wallets"
+                        )
+
+                        headers = {
+                            "Authorization":
+                                f"Token {NOBITEX_TOKEN_PUBLIC}",
+                            "Content-Type":
+                                "application/json"
+                        }
+
+                        res_w = _send_request_with_retry(
+                            "POST",
+                            url_wallet,
+                            headers=headers,
+                            json_data={}
+                        )
+
+                        if (
+                            res_w
+                            and res_w.get("status") == "ok"
+                        ):
+
+                            wallets = (
+                                res_w.get(
+                                    "wallets",
+                                    {}
+                                ) or {}
+                            )
+
+                            wallet_entry = (
+                                wallets.get(
+                                    coin_name_lower.upper()
+                                ) or {}
+                            )
+
+                            coin_balance = float(
+                                wallet_entry.get(
+                                    "balance",
+                                    0.0
+                                )
+                            )
+
+                            entry_price = (
+                                position.get(
+                                    "entry_price"
+                                ) or 1
+                            )
+
+                            expected_quantity = (
+                                BUDGET_TOMAN
+                                / entry_price
+                            )
+
+                            if coin_balance < (
+                                expected_quantity * 0.05
+                            ):
+
+                                logger.info(
+                                    f"🎉 [خروج موفق OCO] "
+                                    f"اردر OCO ارز {symbol} "
+                                    f"در صرافی اجرا و بسته شد."
+                                )
+
+                                now_str = (
+                                    jdatetime.datetime.now()
+                                    .strftime(
+                                        "%Y-%m-%d %H:%M:%S"
+                                    )
+                                )
+
+                                entry_price_val = int(
+                                    position.get(
+                                        "entry_price",
+                                        0
+                                    )
+                                )
+
+                                exit_price_val = int(
+                                    price_in_toman
+                                )
+
+                                pnl_toman = (
+                                    exit_price_val
+                                    - entry_price_val
+                                )
+
+                                was_profit = (
+                                    pnl_toman >= 0
+                                )
+
                                 past_trade = {
-                                    "type": "REAL_OCO_TRADE", "entry_time": position.get("updated_at", "نامشخص"),
-                                    "exit_time": now_str, "entry_price": position.get("entry_price", 0.0),
-                                    "exit_price": int(price_in_toman), "target_day": position.get("target_day"),
-                                    "reason": "اجرای حد سود یا حد ضرر OCO در صرافی نوبیتکس"
+
+                                    "type":
+                                        "REAL_OCO_TRADE",
+
+                                    "entry_time":
+                                        position.get(
+                                            "updated_at",
+                                            "نامشخص"
+                                        ),
+
+                                    "signal_time":
+                                        position.get(
+                                            "signal_time",
+                                            "نامشخص"
+                                        ),
+
+                                    "exit_time":
+                                        now_str,
+
+                                    "entry_price":
+                                        entry_price_val,
+
+                                    "exit_price":
+                                        exit_price_val,
+
+                                    "target_day":
+                                        position.get(
+                                            "target_day"
+                                        ),
+
+                                    "reason":
+                                        "اجرای حد سود یا "
+                                        "حد ضرر OCO در "
+                                        "صرافی نوبیتکس"
                                 }
 
-                                exit_price_val = int(price_in_toman)
-                                entry_price_val = int(position.get("entry_price", 0.0))
-                                pnl_toman = exit_price_val - entry_price_val
-                                was_profit = pnl_toman >= 0
-
                                 real_exit_rows_data = [
-                                    ("جفت ارز", symbol),
-                                    ("قیمت ورود", f"{entry_price_val:,} تومان"),
-                                    ("قیمت خروج", f"{exit_price_val:,} تومان"),
-                                    ("سود/زیان تقریبی هر واحد", f"{pnl_toman:,} تومان"),
-                                    ("زمان ورود", position.get("updated_at", "نامشخص")),
-                                    ("زمان خروج", now_str),
-                                    ("نوع خروج", "اجرای OCO واقعی در نوبیتکس"),
+
+                                    (
+                                        "جفت ارز",
+                                        symbol
+                                    ),
+
+                                    (
+                                        "قیمت ورود",
+                                        f"{entry_price_val:,} تومان"
+                                    ),
+
+                                    (
+                                        "قیمت خروج",
+                                        f"{exit_price_val:,} تومان"
+                                    ),
+
+                                    (
+                                        "سود/زیان تقریبی "
+                                        "هر واحد",
+                                        f"{pnl_toman:,} تومان"
+                                    ),
+
+                                    (
+                                        "زمان سیگنال",
+                                        position.get(
+                                            "signal_time",
+                                            "نامشخص"
+                                        )
+                                    ),
+
+                                    (
+                                        "زمان ورود",
+                                        position.get(
+                                            "updated_at",
+                                            "نامشخص"
+                                        )
+                                    ),
+
+                                    (
+                                        "زمان خروج",
+                                        now_str
+                                    ),
+
+                                    (
+                                        "نوع خروج",
+                                        "اجرای OCO واقعی "
+                                        "در نوبیتکس"
+                                    )
                                 ]
 
                                 last_signals[symbol] = {
-                                    "signal": "HOLD", "entry_price": 0.0, "target_price": 0.0, "stop_price": 0.0,
-                                    "oco_order_id": None, "updated_at": now_str, "target_day": 0.0,
-                                    "trade_history": position.get("trade_history", []) + [past_trade]
-                                }
-                                save_last_signals(last_signals)
 
-                                send_beautiful_email(
-                                    subject=f"{'🎯' if was_profit else '📉'} [خروج واقعی OCO] {symbol} با قیمت {exit_price_val:,} تومان بسته شد.",
-                                    title=f"خروج واقعی از پوزیشن {symbol}",
-                                    type_color="#10b981" if was_profit else "#ef4444",
-                                    rows_data=real_exit_rows_data
+                                    "signal": "HOLD",
+
+                                    "entry_price": 0.0,
+
+                                    "target_price": 0.0,
+
+                                    "stop_price": 0.0,
+
+                                    "oco_order_id": None,
+
+                                    "updated_at":
+                                        now_str,
+
+                                    "signal_time":
+                                        None,
+
+                                    "target_day": 0.0,
+
+                                    "trade_history":
+                                        position.get(
+                                            "trade_history",
+                                            []
+                                        ) + [past_trade]
+                                }
+
+                                save_last_signals(
+                                    last_signals
                                 )
 
-                # ============ صدور سیگنال خرید جدید (چندتایم‌فریمه) ============
-                # =========================================================
-                # صدور سیگنال BUY
-                #
-                # شرایط:
-                #
-                # 1. UT Bot 3/10 در 1H سیگنال BUY داده باشد
-                # 2. روند UT Bot در Daily صعودی باشد
-                # 3. سیگنال فقط از کندل بسته‌شده گرفته شده باشد
-                # =========================================================
+                                open_positions_count = max(
+                                    0,
+                                    open_positions_count - 1
+                                )
 
-                elif current_signal == 'BUY' and position.get("signal") != "BUY":
+                                send_beautiful_email(
 
-                    # -----------------------------------------------------
-                    # فیلتر Daily
-                    # -----------------------------------------------------
+                                    subject=(
+                                        f"{'🎯' if was_profit else '📉'} "
+                                        f"[خروج واقعی OCO] "
+                                        f"{symbol} "
+                                        f"با قیمت "
+                                        f"{exit_price_val:,} "
+                                        f"تومان بسته شد."
+                                    ),
+
+                                    title=(
+                                        f"خروج واقعی از پوزیشن "
+                                        f"{symbol}"
+                                    ),
+
+                                    type_color=(
+                                        "#10b981"
+                                        if was_profit
+                                        else "#ef4444"
+                                    ),
+
+                                    rows_data=
+                                        real_exit_rows_data
+                                )
+
+                                # جلوگیری از ورود مجدد
+                                # در همین چرخه
+                                continue
+
+                # ====================================================
+                # صدور BUY جدید
+                #
+                # اینجا فقط یک بلوک خرید داریم.
+                # بلوک خرید تکراری حذف شده.
+                # ====================================================
+
+                if (
+                    current_signal == "BUY"
+                    and position.get("signal") != "BUY"
+                ):
+
+                    # =================================================
+                    # Daily Filter
+                    # =================================================
 
                     if daily_bias != "BULLISH":
+
                         logger.warning(
                             f"🚫 [{symbol}] BUY رد شد | "
-                            f"UT Bot 1H = BUY ولی Daily = {daily_bias}"
+                            f"UT Bot 1H = BUY ولی "
+                            f"Daily = {daily_bias}"
                         )
 
                         continue
 
-                    # -----------------------------------------------------
-                    # تأیید UT Bot در 1H
-                    # -----------------------------------------------------
+                    # =================================================
+                    # 1H Bias
+                    # =================================================
 
                     if ut_bias_1h != "BULLISH":
+
                         logger.warning(
                             f"🚫 [{symbol}] BUY رد شد | "
-                            f"سیگنال 1H BUY است ولی Bias هنوز صعودی نیست."
+                            f"سیگنال 1H BUY است ولی "
+                            f"Bias هنوز صعودی نیست."
                         )
 
                         continue
+
+                    # =================================================
+                    # جلوگیری از خرید اضافه
+                    # =================================================
 
                     logger.info(
                         f"🟢 [{symbol}] BUY تأیید شد | "
@@ -1510,12 +2418,10 @@ def monitor_market():
                         f"UT 3/10"
                     )
 
-                    # -----------------------------------------------------
-                    # محدودیت تعداد پوزیشن‌های باز
-                    # -----------------------------------------------------
-
-                    if open_positions_count >= MAX_OPEN_POSITIONS:
-                        color_code = PINK
+                    if (
+                        open_positions_count
+                        >= MAX_OPEN_POSITIONS
+                    ):
 
                         logger.warning(
                             f"⚠️ سیگنال خرید {symbol} رد شد. "
@@ -1525,37 +2431,45 @@ def monitor_market():
 
                         continue
 
-                    # -----------------------------------------------------
-                    # دریافت قیمت تتر
-                    # -----------------------------------------------------
+                    # =================================================
+                    # قیمت تتر لحظه خرید
+                    # =================================================
 
-                    dollar_price_now = get_iran_dollar_price()
+                    dollar_price_now = (
+                        get_iran_dollar_price()
+                    )
 
                     if dollar_price_now is None:
+
                         logger.error(
-                            f"❌ خرید {symbol} به دلیل قطع ناگهانی شبکه "
-                            f"در لحظه دریافت قیمت تتر لغو شد."
+                            f"❌ خرید {symbol} به دلیل "
+                            f"قطع ناگهانی شبکه در لحظه "
+                            f"دریافت قیمت تتر لغو شد."
                         )
 
                         continue
 
-                    dollar_price = dollar_price_now
-
-                    # -----------------------------------------------------
-                    # محاسبه Entry / Target / Stop
-                    # -----------------------------------------------------
-
-                    t_entry, t_target, t_stop = simulate_oco_trade(
-                        symbol,
-                        current_price,
-                        atr_value,
-                        dollar_price,
-                        df
+                    dollar_price = (
+                        dollar_price_now
                     )
 
-                    # -----------------------------------------------------
+                    # =================================================
+                    # Entry / Target / Stop
+                    # =================================================
+
+                    t_entry, t_target, t_stop = (
+                        simulate_oco_trade(
+                            symbol,
+                            current_price,
+                            atr_value,
+                            dollar_price,
+                            df
+                        )
+                    )
+
+                    # =================================================
                     # تخمین زمان رسیدن به تارگت
-                    # -----------------------------------------------------
+                    # =================================================
 
                     result = estimate_target_time(
                         t_entry,
@@ -1567,6 +2481,7 @@ def monitor_market():
                     eta_str = "نامشخص"
 
                     if result:
+
                         candles, hours, days = result
 
                         eta_str = (
@@ -1576,332 +2491,381 @@ def monitor_market():
                         )
 
                         logger.info(
-                            f"⏳ زمان تقریبی رسیدن به تارگت برای "
-                            f"{symbol}: {eta_str}"
+                            f"⏳ زمان تقریبی رسیدن به تارگت "
+                            f"برای {symbol}: {eta_str}"
                         )
 
                     print(
                         f"{GREEN}"
-                        f"⏳ [{symbol}] زمان تقریبی رسیدن به هدف: "
-                        f"{eta_str}"
+                        f"⏳ [{symbol}] زمان تقریبی رسیدن "
+                        f"به هدف: {eta_str}"
                         f"{RESET}"
                     )
 
-                    # -----------------------------------------------------
-                    # محاسبه درصد سود و زیان
-                    # -----------------------------------------------------
+                    # =================================================
+                    # درصد سود و زیان
+                    # =================================================
 
                     profit_pct = (
-                        (t_target - t_entry) / t_entry
-                        if t_entry > 0 else 0.0
+                        (t_target - t_entry)
+                        / t_entry
+                        if t_entry > 0
+                        else 0.0
                     )
 
                     loss_pct = (
-                        (t_entry - t_stop) / t_entry
-                        if t_entry > 0 else 0.0
+                        (t_entry - t_stop)
+                        / t_entry
+                        if t_entry > 0
+                        else 0.0
                     )
 
                     final_target = int(
-                        price_in_toman * (1 + profit_pct)
+                        price_in_toman
+                        * (1 + profit_pct)
                     )
 
                     final_stop = int(
-                        price_in_toman * (1 - loss_pct)
+                        price_in_toman
+                        * (1 - loss_pct)
                     )
 
-                    # -----------------------------------------------------
-                    # ثبت خرید
-                    # -----------------------------------------------------
+                    # =================================================
+                    # ارسال خرید
+                    # =================================================
 
-                    order_success, order_id = place_buy_order_and_notify(
-                        symbol,
-                        price_in_toman,
-                        budget_toman=BUDGET_TOMAN
+                    order_success, order_id = (
+                        place_buy_order_and_notify(
+                            symbol,
+                            price_in_toman,
+                            budget_toman=BUDGET_TOMAN
+                        )
                     )
 
-                    if order_success:
+                    if not order_success:
 
-                        if PAPER_TRADING:
+                        logger.error(
+                            f"❌ خرید {symbol} انجام نشد."
+                        )
+
+                        continue
+
+                    # =================================================
+                    # Paper Trading
+                    # =================================================
+
+                    if PAPER_TRADING:
+
+                        real_quantity = (
+                            BUDGET_TOMAN
+                            / (price_in_toman * 1.002)
+                        )
+
+                        logger.info(
+                            f"✨ [Paper Trading] "
+                            f"خرید فرضی {symbol} شبیه‌سازی شد."
+                        )
+
+                        logger.info(
+                            f"🛡️ [Paper Trading] "
+                            f"سفارش OCO فرضی برای "
+                            f"{symbol} ثبت شد."
+                        )
+
+                    # =================================================
+                    # Real Trading
+                    # =================================================
+
+                    else:
+
+                        real_quantity = 0.0
+
+                        logger.info(
+                            f"⏳ در حال استعلام دائم وضعیت "
+                            f"سفارش {order_id} از نوبیتکس..."
+                        )
+
+                        max_attempts = 60
+
+                        attempts = 0
+
+                        while (
+                            real_quantity <= 0
+                            and attempts < max_attempts
+                        ):
+
+                            attempts += 1
 
                             real_quantity = (
-                                    BUDGET_TOMAN /
-                                    (price_in_toman * 1.002)
-                            )
-
-                            logger.info(
-                                f"🛡️ [Paper Trading] "
-                                f"سفارش OCO فرضی برای {symbol} ثبت شد."
-                            )
-
-                        else:
-
-                            real_quantity = 0.0
-
-                            logger.info(
-                                f"⏳ در حال استعلام دائم وضعیت "
-                                f"سفارش {order_id} از نوبیتکس..."
-                            )
-
-                            max_attempts = 60
-                            attempts = 0
-
-                            while (
-                                    real_quantity <= 0
-                                    and attempts < max_attempts
-                            ):
-
-                                attempts += 1
-
-                                real_quantity = (
-                                    get_nobitex_order_matched_amount(
-                                        order_id
-                                    )
+                                get_nobitex_order_matched_amount(
+                                    order_id
                                 )
+                            )
 
-                                if real_quantity > 0:
-                                    logger.info(
-                                        f"✅ سفارش پس از "
-                                        f"{attempts} بار تلاش "
-                                        f"کاملاً پر شد."
-                                    )
+                            if real_quantity > 0:
 
-                                    break
-
-                                time.sleep(2)
-
-                        if real_quantity > 0:
-
-                            if not PAPER_TRADING:
                                 logger.info(
-                                    f"📈 [تکمیل خرید واقعی] "
-                                    f"مقدار خالص معامله شده بعد کارمزد: "
-                                    f"{real_quantity:.4f}"
+                                    f"✅ سفارش پس از "
+                                    f"{attempts} بار تلاش "
+                                    f"کاملاً پر شد."
                                 )
 
-                                place_nobitex_oco_sell_order(
-                                    symbol,
-                                    real_quantity,
-                                    final_target,
-                                    final_stop
-                                )
+                                break
 
-                            # -------------------------------------------------
-                            # ذخیره پوزیشن
-                            # -------------------------------------------------
+                            time.sleep(2)
 
-                            now_str = jdatetime.datetime.now().strftime(
+                    # =================================================
+                    # اگر خرید واقعاً انجام شد
+                    # =================================================
+
+                    if real_quantity > 0:
+
+                        # ---------------------------------------------
+                        # OCO واقعی
+                        # ---------------------------------------------
+
+                        if not PAPER_TRADING:
+
+                            logger.info(
+                                f"📈 [تکمیل خرید واقعی] "
+                                f"مقدار خالص معامله شده "
+                                f"بعد کارمزد: "
+                                f"{real_quantity:.4f}"
+                            )
+
+                            place_nobitex_oco_sell_order(
+                                symbol,
+                                real_quantity,
+                                final_target,
+                                final_stop
+                            )
+
+                        # ---------------------------------------------
+                        # زمان ثبت پوزیشن
+                        # ---------------------------------------------
+
+                        now_str = (
+                            jdatetime.datetime.now()
+                            .strftime(
                                 "%Y-%m-%d %H:%M:%S"
                             )
+                        )
 
-                            last_signals[symbol] = {
+                        # ---------------------------------------------
+                        # ذخیره پوزیشن
+                        #
+                        # signal_time اضافه شد.
+                        # ---------------------------------------------
 
-                                "signal": "BUY",
+                        last_signals[symbol] = {
 
-                                "entry_price": int(
-                                    price_in_toman * 1.002
-                                ),
+                            "signal": "BUY",
 
-                                "target_price": final_target,
+                            "entry_price": int(
+                                price_in_toman * 1.002
+                            ),
 
-                                "stop_price": final_stop,
+                            "target_price":
+                                final_target,
 
-                                "oco_order_id":
-                                    order_id
-                                    if not PAPER_TRADING
-                                    else None,
+                            "stop_price":
+                                final_stop,
 
-                                "updated_at": now_str,
+                            "oco_order_id":
+                                order_id
+                                if not PAPER_TRADING
+                                else None,
 
-                                "target_day": eta_str,
+                            "updated_at":
+                                now_str,
 
-                                "trade_history":
-                                    position.get(
-                                        "trade_history",
-                                        []
-                                    )
-                            }
+                            "signal_time":
+                                signal_time_str,
 
-                            save_last_signals(last_signals)
+                            "target_day":
+                                eta_str,
 
-                            last_nobitex_update = 0
-
-                            open_positions_count += 1
-
-                            trade_mode = (
-                                "تست فرضی (Paper)"
-                                if PAPER_TRADING
-                                else "معامله واقعی"
-                            )
-
-                            rows_data = [
-
-                                ("جفت ارز", symbol),
-
-                                ("حالت معامله", trade_mode),
-
-                                (
-                                    "قیمت ورود",
-                                    f"{int(price_in_toman * 1.002):,} تومان"
-                                ),
-
-                                (
-                                    "تارگت OCO",
-                                    f"{final_target:,} تومان"
-                                ),
-
-                                (
-                                    "استاپ OCO",
-                                    f"{final_stop:,} تومان"
-                                ),
-
-                                (
-                                    "زمان تقریبی رسیدن به هدف",
-                                    eta_str
-                                ),
-
-                                (
-                                    "مقدار خرید",
-                                    f"{real_quantity:.4f}"
-                                ),
-
-                                (
-                                    "تأیید Daily",
-                                    "UT Bot 3/10 - BULLISH"
-                                ),
-
-                                (
-                                    "سیگنال ورود",
-                                    "UT Bot 3/10 - 1H BUY"
+                            "trade_history":
+                                position.get(
+                                    "trade_history",
+                                    []
                                 )
-                            ]
+                        }
 
-                            send_beautiful_email(
+                        save_last_signals(
+                            last_signals
+                        )
 
-                                subject=(
-                                    f"🚀 سیگنال خرید "
-                                    f"{symbol} ({trade_mode})"
-                                ),
+                        # چون اطلاعات موجودی/پوزیشن تغییر کرده
+                        # در چرخه بعد دوباره Wallet بررسی می‌شود.
+                        last_nobitex_update = 0
 
-                                title=(
-                                    f"خرید موفقیت‌آمیز {symbol}"
-                                ),
+                        open_positions_count += 1
 
-                                type_color="#10b981",
+                        trade_mode = (
+                            "تست فرضی (Paper)"
+                            if PAPER_TRADING
+                            else "معامله واقعی"
+                        )
 
-                                rows_data=rows_data
+                        # ---------------------------------------------
+                        # ایمیل خرید
+                        # ---------------------------------------------
+
+                        rows_data = [
+
+                            (
+                                "جفت ارز",
+                                symbol
+                            ),
+
+                            (
+                                "حالت معامله",
+                                trade_mode
+                            ),
+
+                            (
+                                "قیمت ورود",
+                                f"{int(price_in_toman * 1.002):,} تومان"
+                            ),
+
+                            (
+                                "تارگت OCO",
+                                f"{final_target:,} تومان"
+                            ),
+
+                            (
+                                "استاپ OCO",
+                                f"{final_stop:,} تومان"
+                            ),
+
+                            (
+                                "زمان تقریبی رسیدن به هدف",
+                                eta_str
+                            ),
+
+                            (
+                                "مقدار خرید",
+                                f"{real_quantity:.4f}"
+                            ),
+
+                            (
+                                "زمان سیگنال",
+                                signal_time_str
+                            ),
+
+                            (
+                                "زمان ثبت خرید",
+                                now_str
+                            ),
+
+                            (
+                                "تأیید Daily",
+                                "UT Bot 3/10 - BULLISH"
+                            ),
+
+                            (
+                                "سیگنال ورود",
+                                "UT Bot 3/10 - 1H BUY"
                             )
+                        ]
 
-                        else:
+                        send_beautiful_email(
 
-                            logger.error(
-                                f"❌ خطای بحرانی: سفارش "
-                                f"{order_id} در نوبیتکس پر نشد! "
-                                f"پوزیشن ذخیره نشد."
-                            )
+                            subject=(
+                                f"🚀 سیگنال خرید "
+                                f"{symbol} "
+                                f"({trade_mode})"
+                            ),
 
+                            title=(
+                                f"خرید موفقیت‌آمیز "
+                                f"{symbol}"
+                            ),
 
-                    dollar_price_now = get_iran_dollar_price()
-                    if dollar_price_now is None:
-                        logger.error(f"❌ خرید {symbol} به دلیل قطع ناگهانی شبکه در لحظه دریافت قیمت تتر لغو شد.")
-                        continue
-                    dollar_price = dollar_price_now
+                            type_color="#10b981",
 
-                    t_entry, t_target, t_stop = simulate_oco_trade(symbol, current_price, atr_value, dollar_price, df)
+                            rows_data=rows_data
+                        )
 
-                    result = estimate_target_time(t_entry, t_target, atr_value * dollar_price, 1)
-                    eta_str = "نامشخص"
-                    if result:
-                        candles, hours, days = result
-                        eta_str = f"{days:.1f} روز ({hours:.1f} ساعت / ~{candles:.1f} کندل)"
-                        logger.info(f"⏳ زمان تقریبی رسیدن به تارگت برای {symbol}: {eta_str}")
+                    else:
 
-                    print(f"{GREEN}⏳ [{symbol}] زمان تقریبی رسیدن به هدف: {eta_str}{RESET}")
+                        logger.error(
+                            f"❌ خطای بحرانی: سفارش "
+                            f"{order_id} در نوبیتکس پر نشد! "
+                            f"پوزیشن ذخیره نشد."
+                        )
 
-                    profit_pct = (t_target - t_entry) / t_entry if t_entry > 0 else 0.0
-                    loss_pct = (t_entry - t_stop) / t_entry if t_entry > 0 else 0.0
-
-                    final_target = int(price_in_toman * (1 + profit_pct))
-                    final_stop = int(price_in_toman * (1 - loss_pct))
-
-                    order_success, order_id = place_buy_order_and_notify(symbol, price_in_toman, budget_toman=BUDGET_TOMAN)
-
-                    if order_success:
-                        if PAPER_TRADING:
-                            real_quantity = BUDGET_TOMAN / (price_in_toman * 1.002)
-                            logger.info(f"🛡️ [Paper Trading] سفارش OCO فرضی برای {symbol} ثبت شد.")
-                        else:
-                            real_quantity = 0.0
-                            logger.info(f"⏳ در حال استعلام دائم وضعیت سفارش {order_id} از نوبیتکس...")
-                            max_attempts = 60
-                            attempts = 0
-                            while real_quantity <= 0 and attempts < max_attempts:
-                                attempts += 1
-                                real_quantity = get_nobitex_order_matched_amount(order_id)
-                                if real_quantity > 0:
-                                    logger.info(f"✅ سفارش پس از {attempts} بار تلاش کاملاً پر شد.")
-                                    break
-                                time.sleep(2)
-
-                        if real_quantity > 0:
-                            if not PAPER_TRADING:
-                                logger.info(f"📈 [تکمیل خرید واقعی] مقدار خالص معامله شده بعد کارمزد: {real_quantity:.4f}")
-                                place_nobitex_oco_sell_order(symbol, real_quantity, final_target, final_stop)
-
-                            now_str = jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            last_signals[symbol] = {
-                                "signal": "BUY",
-                                "entry_price": int(price_in_toman * 1.002),
-                                "target_price": final_target,
-                                "stop_price": final_stop,
-                                "oco_order_id": order_id if not PAPER_TRADING else None,
-                                "updated_at": now_str,
-                                "target_day": eta_str,
-                                "trade_history": position.get("trade_history", [])
-                            }
-                            save_last_signals(last_signals)
-                            last_nobitex_update = 0
-                            open_positions_count += 1
-
-                            trade_mode = "تست فرضی (Paper)" if PAPER_TRADING else "معامله واقعی"
-                            rows_data = [
-                                ("جفت ارز", symbol),
-                                ("حالت معامله", trade_mode),
-                                ("قیمت ورود", f"{int(price_in_toman * 1.002):,} تومان"),
-                                ("تارگت OCO", f"{final_target:,} تومان"),
-                                ("استاپ OCO", f"{final_stop:,} تومان"),
-                                ("زمان تقریبی رسیدن به هدف", eta_str),
-                                ("مقدار خرید", f"{real_quantity:.4f}")
-                            ]
-                            send_beautiful_email(
-                                subject=f"🚀 سیگنال خرید {symbol} ({trade_mode})",
-                                title=f"خرید موفقیت‌آمیز {symbol}",
-                                type_color="#10b981",
-                                rows_data=rows_data
-                            )
-                        else:
-                            logger.error(f"❌ خطای بحرانی: سفارش {order_id} در نوبیتکس پر نشد! پوزیشن ذخیره نشد.")
+                # ====================================================
+                # فاصله کوتاه بین ارزها
+                # ====================================================
 
                 time.sleep(0.2)
+
             except Exception as e:
-                logger.error(f"⚠️ خطا در پردازش {symbol}: {e}", exc_info=True)
+
+                logger.error(
+                    f"⚠️ خطا در پردازش {symbol}: {e}",
+                    exc_info=True
+                )
+
                 continue
 
-        if log_lines_buffer:
-            try:
-                with open("market_monitor.log", "a", encoding="utf-8") as log_file:
-                    log_file.write("\n".join(log_lines_buffer) + "\n")
-            except OSError as e:
-                logger.error(f"⚠️ خطا در نوشتن فایل لاگ: {e}")
+        # ============================================================
+        # ذخیره لاگ چرخه
+        # ============================================================
 
-        print(f"\n💤 استراحت ۳۰۰ ثانیه‌ای تا چرخه بعدی...")
+        if log_lines_buffer:
+
+            try:
+
+                with open(
+                    "market_monitor.log",
+                    "a",
+                    encoding="utf-8"
+                ) as log_file:
+
+                    log_file.write(
+                        "\n".join(
+                            log_lines_buffer
+                        ) + "\n"
+                    )
+
+            except OSError as e:
+
+                logger.error(
+                    f"⚠️ خطا در نوشتن فایل لاگ: {e}"
+                )
+
+        # ============================================================
+        # پایان چرخه
+        # ============================================================
+
+        print(
+            "\n💤 استراحت ۳۰۰ ثانیه‌ای "
+            "تا چرخه بعدی..."
+        )
+
         try:
-            with open("market_monitor.log", "a", encoding="utf-8") as log_file:
-                log_file.write(f"\n--- چرخه بعدی پایش در ۳۰۰ ثانیه آینده ---\n\n")
+
+            with open(
+                "market_monitor.log",
+                "a",
+                encoding="utf-8"
+            ) as log_file:
+
+                log_file.write(
+                    "\n--- چرخه بعدی پایش "
+                    "در ۳۰۰ ثانیه آینده ---\n\n"
+                )
+
         except OSError as e:
-            logger.error(f"⚠️ خطا در نوشتن فایل لاگ: {e}")
+
+            logger.error(
+                f"⚠️ خطا در نوشتن فایل لاگ: {e}"
+            )
 
         time.sleep(300)
-
 
 def generate_daily_report(file_path):
     logger.info("📊 در حال محاسبه و تولید کارنامه معاملات ۲۴ ساعت گذشته...")
