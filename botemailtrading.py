@@ -596,40 +596,13 @@ def get_kucoin_data(symbol, timeframe, limit=300):
         return None
 
 
+
 def calculate_ut_bot_1h_live(df, sensitivity=3, atr_period=10):
-    """
-    UT Bot Alerts - 1H
-    ===================
-
-    تنظیمات پیش‌فرض:
-        Sensitivity = 3
-        ATR Period = 10
-
-    منطق:
-        1. ATR با Wilder
-        2. محاسبه xATRTrailingStop
-        3. تشخیص BUY/SELL با Cross قیمت و Trailing Stop
-        4. فقط کندل بسته‌شده برای سیگنال معتبر است
-        5. آخرین کندل DataFrame به عنوان کندل در حال تشکیل
-           در نظر گرفته می‌شود و سیگنال آن HOLD خواهد بود.
-
-    خروجی:
-        signal:
-            BUY / SELL / HOLD
-
-        UT_Bias:
-            BULLISH / BEARISH / NEUTRAL
-    """
-
     import numpy as np
     import pandas as pd
     import ta
 
     df = df.copy()
-
-    # =========================================================
-    # 1. بررسی ستون‌های مورد نیاز
-    # =========================================================
 
     required_columns = [
         'open',
@@ -649,33 +622,15 @@ def calculate_ut_bot_1h_live(df, sensitivity=3, atr_period=10):
             f"ستون‌های زیر در DataFrame وجود ندارند: {missing}"
         )
 
-    # =========================================================
-    # 2. تبدیل داده‌ها به عدد
-    # =========================================================
-
-    for col in [
-        'open',
-        'high',
-        'low',
-        'close',
-        'volume'
-    ]:
+    for col in required_columns:
         df[col] = pd.to_numeric(
             df[col],
             errors='coerce'
         )
 
     df = df.dropna(
-        subset=[
-            'high',
-            'low',
-            'close'
-        ]
+        subset=['high', 'low', 'close']
     ).copy()
-
-    # =========================================================
-    # 3. حداقل تعداد کندل
-    # =========================================================
 
     min_bars = max(
         atr_period + 20,
@@ -683,28 +638,20 @@ def calculate_ut_bot_1h_live(df, sensitivity=3, atr_period=10):
     )
 
     if len(df) < min_bars:
-
         df['ATR'] = np.nan
         df['TrailingStop'] = np.nan
         df['UT_Position'] = 0
         df['signal'] = 'HOLD'
         df['UT_Bias'] = 'NEUTRAL'
-
-        df['Volume_MA'] = (
-            df['volume']
-            .rolling(20)
-            .mean()
-        )
-
+        df['Volume_MA'] = df['volume'].rolling(20).mean()
         df['RSI'] = ta.momentum.rsi(
             df['close'],
             window=14
         )
-
         return df
 
     # =========================================================
-    # 4. ATR - Wilder
+    # ATR - Wilder
     # =========================================================
 
     df['ATR'] = ta.volatility.average_true_range(
@@ -715,14 +662,6 @@ def calculate_ut_bot_1h_live(df, sensitivity=3, atr_period=10):
         fillna=False
     )
 
-    # =========================================================
-    # 5. nLoss
-    #
-    # UT Bot:
-    #
-    # nLoss = ATR × Sensitivity
-    # =========================================================
-
     df['nLoss'] = (
         df['ATR'] * sensitivity
     )
@@ -731,10 +670,6 @@ def calculate_ut_bot_1h_live(df, sensitivity=3, atr_period=10):
     nloss = df['nLoss'].astype(float).values
 
     length = len(df)
-
-    # =========================================================
-    # 6. آرایه‌های خروجی
-    # =========================================================
 
     trailing_stop = np.full(
         length,
@@ -752,16 +687,12 @@ def calculate_ut_bot_1h_live(df, sensitivity=3, atr_period=10):
         dtype=object
     )
 
-    # =========================================================
-    # 7. اولین ATR معتبر
-    # =========================================================
-
     valid_indices = np.where(
-        np.isfinite(nloss) & (nloss > 0)
+        np.isfinite(nloss) &
+        (nloss > 0)
     )[0]
 
     if len(valid_indices) == 0:
-
         df['TrailingStop'] = np.nan
         df['UT_Position'] = 0
         df['signal'] = 'HOLD'
@@ -785,11 +716,11 @@ def calculate_ut_bot_1h_live(df, sensitivity=3, atr_period=10):
 
         return df
 
-    first = valid_indices[0]
+    # =========================================================
+    # مقدار اولیه
+    # =========================================================
 
-    # =========================================================
-    # 8. مقدار اولیه Trailing Stop
-    # =========================================================
+    first = valid_indices[0]
 
     trailing_stop[first] = (
         close[first] - nloss[first]
@@ -798,7 +729,7 @@ def calculate_ut_bot_1h_live(df, sensitivity=3, atr_period=10):
     position[first] = 1
 
     # =========================================================
-    # 9. محاسبه UT Bot
+    # UT Bot
     # =========================================================
 
     for i in range(first + 1, length):
@@ -809,24 +740,18 @@ def calculate_ut_bot_1h_live(df, sensitivity=3, atr_period=10):
         current_loss = nloss[i]
         previous_stop = trailing_stop[i - 1]
 
-        # -----------------------------------------------------
-        # ATR نامعتبر
-        # -----------------------------------------------------
-
         if (
             not np.isfinite(current_loss)
             or current_loss <= 0
             or not np.isfinite(previous_stop)
         ):
-
             trailing_stop[i] = previous_stop
             position[i] = position[i - 1]
-
             continue
 
-        # =====================================================
+        # -----------------------------------------------------
         # xATRTrailingStop
-        # =====================================================
+        # -----------------------------------------------------
 
         if (
             current_close > previous_stop
@@ -860,9 +785,9 @@ def calculate_ut_bot_1h_live(df, sensitivity=3, atr_period=10):
                 current_close + current_loss
             )
 
-        # =====================================================
-        # تعیین Position
-        # =====================================================
+        # -----------------------------------------------------
+        # Position
+        # -----------------------------------------------------
 
         if (
             previous_close <= previous_stop
@@ -882,12 +807,9 @@ def calculate_ut_bot_1h_live(df, sensitivity=3, atr_period=10):
 
             position[i] = position[i - 1]
 
-        # =====================================================
-        # BUY
-        #
-        # قیمت از زیر/روی Stop
-        # به بالای Stop عبور کرده
-        # =====================================================
+        # -----------------------------------------------------
+        # Signal
+        # -----------------------------------------------------
 
         if (
             previous_close <= previous_stop
@@ -895,13 +817,6 @@ def calculate_ut_bot_1h_live(df, sensitivity=3, atr_period=10):
         ):
 
             signals[i] = 'BUY'
-
-        # =====================================================
-        # SELL
-        #
-        # قیمت از بالا/روی Stop
-        # به زیر Stop عبور کرده
-        # =====================================================
 
         elif (
             previous_close >= previous_stop
@@ -915,52 +830,38 @@ def calculate_ut_bot_1h_live(df, sensitivity=3, atr_period=10):
             signals[i] = 'HOLD'
 
     # =========================================================
-    # 10. ذخیره نتایج UT Bot
+    # ذخیره نتایج
     # =========================================================
 
     df['TrailingStop'] = trailing_stop
-
     df['UT_Position'] = position
-
     df['signal'] = signals
 
     # =========================================================
-    # 11. UT Bias
+    # UT Bias
     # =========================================================
 
     df['UT_Bias'] = 'NEUTRAL'
 
-    bullish = (
-        df['close'] > df['TrailingStop']
-    )
-
-    bearish = (
-        df['close'] < df['TrailingStop']
-    )
-
     df.loc[
-        bullish,
+        df['close'] > df['TrailingStop'],
         'UT_Bias'
     ] = 'BULLISH'
 
     df.loc[
-        bearish,
+        df['close'] < df['TrailingStop'],
         'UT_Bias'
     ] = 'BEARISH'
 
     # =========================================================
-    # 12. Volume MA
+    # اطلاعات کمکی
     # =========================================================
 
     df['Volume_MA'] = (
         df['volume']
-        .rolling(window=20)
+        .rolling(20)
         .mean()
     )
-
-    # =========================================================
-    # 13. RSI
-    # =========================================================
 
     df['RSI'] = ta.momentum.rsi(
         close=df['close'],
@@ -968,32 +869,23 @@ def calculate_ut_bot_1h_live(df, sensitivity=3, atr_period=10):
     )
 
     # =========================================================
-    # 14. حذف ستون کمکی
+    # آخرین کندل = در حال تشکیل
+    # سیگنال آن معتبر نیست
     # =========================================================
+
+    df.iloc[
+        -1,
+        df.columns.get_loc('signal')
+    ] = 'HOLD'
 
     df.drop(
         columns=['nLoss'],
         inplace=True
     )
 
-    # =========================================================
-    # 15. نکته بسیار مهم:
-    #
-    # آخرین کندل معمولاً کندل در حال تشکیل است.
-    # بنابراین سیگنال آن معتبر نیست.
-    #
-    # Bias را دست نمی‌زنیم،
-    # ولی Signal آخر را HOLD می‌کنیم.
-    # =========================================================
-
-    if len(df) >= 1:
-
-        df.iloc[
-            -1,
-            df.columns.get_loc('signal')
-        ] = 'HOLD'
-
     return df
+
+
 
 
 def estimate_target_time(entry_price, target_price, atr_value, timeframe_hours=1):
@@ -1013,24 +905,83 @@ def estimate_target_time(entry_price, target_price, atr_value, timeframe_hours=1
     return estimated_candles, hours, days
 
 
-def simulate_oco_trade(symbol, current_price, atr_value, dollar_price, df):
-    coin_name = symbol.split('/')[0]
-    recent_low = df['low'].iloc[-21:-1].min()
 
-    stop_raw = min(current_price - (3.0 * atr_value), recent_low * 0.99)
-    risk_amount = current_price - stop_raw
-    target_raw = current_price + (risk_amount * 2.0)
+def simulate_oco_trade(
+        symbol,
+        current_price,
+        atr_value,
+        dollar_price,
+        df,
+        risk_reward=2.0,
+        atr_multiplier=2.0,
+        timeframe_hours=1
+):
+    coin_name = symbol.split('/')[0]
+
+    current_price = float(current_price)
+    atr_value = float(atr_value)
+    dollar_price = float(dollar_price)
+
+    if current_price <= 0:
+        raise ValueError(f"[{symbol}] قیمت نامعتبر است.")
+
+    if atr_value <= 0:
+        raise ValueError(f"[{symbol}] ATR نامعتبر است.")
+
+    stop_raw = current_price - (atr_multiplier * atr_value)
 
     if stop_raw <= 0:
         stop_raw = current_price * 0.95
+
+    risk_amount = current_price - stop_raw
+
+    target_raw = current_price + (risk_amount * risk_reward)
 
     price_in_toman = current_price * dollar_price
     target_in_toman = target_raw * dollar_price
     stop_in_toman = stop_raw * dollar_price
 
-    toman_entry = f"{price_in_toman:,.2f}" if price_in_toman < 100 else f"{int(price_in_toman):,}"
-    toman_target = f"{target_in_toman:,.2f}" if target_in_toman < 100 else f"{int(target_in_toman):,}"
-    toman_stop = f"{stop_in_toman:,.2f}" if stop_in_toman < 100 else f"{int(stop_in_toman):,}"
+    estimated_candles, hours, days = estimate_target_time(
+        current_price,
+        target_raw,
+        atr_value,
+        timeframe_hours
+    )
+
+    toman_entry = (
+        f"{price_in_toman:,.2f}"
+        if price_in_toman < 100
+        else f"{int(price_in_toman):,}"
+    )
+
+    toman_target = (
+        f"{target_in_toman:,.2f}"
+        if target_in_toman < 100
+        else f"{int(target_in_toman):,}"
+    )
+
+    toman_stop = (
+        f"{stop_in_toman:,.2f}"
+        if stop_in_toman < 100
+        else f"{int(stop_in_toman):,}"
+    )
+
+    potential_profit = target_in_toman - price_in_toman
+    potential_loss = price_in_toman - stop_in_toman
+
+    logging.info(
+        f"🎯 [{symbol}] Entry={current_price:.8f} | "
+        f"ATR={atr_value:.8f} | "
+        f"Stop={stop_raw:.8f} | "
+        f"Target={target_raw:.8f} | "
+        f"R:R=1:{risk_reward}"
+    )
+
+    logging.info(
+        f"⏳ [{symbol}] زمان تقریبی تارگت: "
+        f"{days:.1f} روز "
+        f"({hours:.1f} ساعت / ~{estimated_candles:.1f} کندل)"
+    )
 
     subject = f"🎯 [خرید فوری] {coin_name}"
     title = f"🟢 سیگنال ورود به پوزیشن: {coin_name}"
@@ -1038,12 +989,32 @@ def simulate_oco_trade(symbol, current_price, atr_value, dollar_price, df):
     rows_data = [
         ("نام ارز دیجیتال", coin_name),
         ("قیمت خرید (تومان)", f"{toman_entry} تومان"),
-        ("قیمت خرید (دلار)", f"${current_price:.5f}"),
+        ("قیمت خرید (دلار)", f"${current_price:.8f}"),
+        ("ATR", f"{atr_value:.8f}"),
         ("حد سود / تارگت (تومان)", f"{toman_target} تومان"),
-        ("حد ضرر / استاپ (تومان)", f"{toman_stop} تومان")
+        ("حد ضرر / استاپ (تومان)", f"{toman_stop} تومان"),
+        ("Risk / Reward", f"1:{risk_reward:.1f}"),
+        ("سود احتمالی", f"+{potential_profit:,.0f} تومان"),
+        ("زیان احتمالی", f"-{potential_loss:,.0f} تومان"),
+        (
+            "زمان تقریبی تارگت",
+            f"{days:.1f} روز ({hours:.1f} ساعت / "
+            f"~{estimated_candles:.1f} کندل)"
+        )
     ]
-    send_beautiful_email(subject, title, "#10b981", rows_data)
-    return price_in_toman, target_in_toman, stop_in_toman
+
+    send_beautiful_email(
+        subject,
+        title,
+        "#10b981",
+        rows_data
+    )
+
+    return (
+        price_in_toman,
+        target_in_toman,
+        stop_in_toman
+    )
 
 
 def simulate_sell_trade(symbol, current_price, dollar_price, reason="سیگنال اندیکاتور"):
@@ -1352,7 +1323,7 @@ def monitor_market():
         "BASED/USDT",
         "ONE/USDT", "BICO/USDT", "NOT/USDT", "KAITO/USDT",
         "PUMP/USDT", "BARD/USDT", "PROM/USDT", "LA/USDT",
-        "ZAMA/USDT", "HOME/USDT"
+        "ZAMA/USDT", "HOME/USDT","XAUT/USDT","TURBO/USDT",
     ]
 
     DB_FILE = "live_signals_v2.json"
