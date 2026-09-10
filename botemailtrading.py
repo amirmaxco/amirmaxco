@@ -1017,6 +1017,103 @@ def simulate_oco_trade(
     )
 
 
+def simulate_short_trade(
+        symbol,
+        current_price,
+        atr_value,
+        dollar_price,
+        df,
+        risk_reward=2.0,
+        atr_multiplier=2.0,
+        timeframe_hours=1
+):
+    """فروش کوتاه (SHORT) = خرید معکوس"""
+    coin_name = symbol.split('/')[0]
+
+    current_price = float(current_price)
+    atr_value = float(atr_value)
+    dollar_price = float(dollar_price)
+
+    if current_price <= 0:
+        raise ValueError(f"[{symbol}] قیمت نامعتبر است.")
+
+    if atr_value <= 0:
+        raise ValueError(f"[{symbol}] ATR نامعتبر است.")
+
+    # استاپ برای SHORT بالاتر است (نه پایین‌تر)
+    stop_raw = current_price + (atr_multiplier * atr_value)
+
+    risk_amount = stop_raw - current_price
+    target_raw = current_price - (risk_amount * risk_reward)
+
+    if target_raw <= 0:
+        target_raw = current_price * 0.95
+
+    price_in_toman = current_price * dollar_price
+    target_in_toman = target_raw * dollar_price
+    stop_in_toman = stop_raw * dollar_price
+
+    estimated_candles, hours, days = estimate_target_time(
+        current_price,
+        target_raw,
+        atr_value,
+        timeframe_hours
+    )
+
+    toman_entry = (
+        f"{price_in_toman:,.2f}"
+        if price_in_toman < 100
+        else f"{int(price_in_toman):,}"
+    )
+
+    toman_target = (
+        f"{target_in_toman:,.2f}"
+        if target_in_toman < 100
+        else f"{int(target_in_toman):,}"
+    )
+
+    toman_stop = (
+        f"{stop_in_toman:,.2f}"
+        if stop_in_toman < 100
+        else f"{int(stop_in_toman):,}"
+    )
+
+    potential_profit = price_in_toman - target_in_toman
+    potential_loss = stop_in_toman - price_in_toman
+
+    logger.info(
+        f"🔴 SHORT [{symbol}] Entry={current_price:.8f} | "
+        f"ATR={atr_value:.8f} | "
+        f"Stop={stop_raw:.8f} | "
+        f"Target={target_raw:.8f}"
+    )
+
+    subject = f"🔴 [فروش کوتاه] {coin_name}"
+    title = f"🔴 سیگنال ورود SHORT: {coin_name}"
+
+    rows_data = [
+        ("نام ارز دیجیتال", coin_name),
+        ("قیمت فروش کوتاه (تومان)", f"{toman_entry} تومان"),
+        ("قیمت فروش کوتاه (دلار)", f"${current_price:.8f}"),
+        ("ATR", f"{atr_value:.8f}"),
+        ("تارگت (هدف)", f"{toman_target} تومان"),
+        ("استاپ لاس", f"{toman_stop} تومان"),
+        ("Risk / Reward", f"1:{risk_reward:.1f}"),
+        ("سود احتمالی", f"+{potential_profit:,.0f} تومان"),
+        ("زیان احتمالی", f"-{potential_loss:,.0f} تومان"),
+        ("زمان تقریبی رسیدن به هدف", f"{days:.1f} روز ({hours:.1f} ساعت / ~{estimated_candles:.1f} کندل)")
+    ]
+
+    send_beautiful_email(
+        subject,
+        title,
+        "#ef4444",
+        rows_data
+    )
+
+    return price_in_toman, target_in_toman, stop_in_toman
+
+
 def simulate_sell_trade(symbol, current_price, dollar_price, reason="سیگنال اندیکاتور"):
     coin_name = symbol.split('/')[0]
     price_in_toman = current_price * dollar_price
@@ -1424,7 +1521,7 @@ def monitor_market():
             for sym in symbols
             if (
                     isinstance(last_signals.get(sym), dict)
-                    and last_signals[sym].get("signal") == "BUY"
+                    and last_signals[sym].get("signal") in ["BUY", "SHORT"]
             )
         )
 
@@ -1458,6 +1555,7 @@ def monitor_market():
 
                 daily_bias = "NEUTRAL"
                 is_daily_bullish = False
+                is_daily_bearish = False
 
                 if (
                         df_1d is not None
@@ -1481,6 +1579,7 @@ def monitor_market():
                     daily_bias = daily_row["UT_Bias"]
 
                     is_daily_bullish = (daily_bias == "BULLISH")
+                    is_daily_bearish = (daily_bias == "BEARISH")
 
                     logger.info(
                         f"📅 [{symbol}] Daily Bias: {daily_bias}"
@@ -1496,16 +1595,16 @@ def monitor_market():
                     continue
 
                 # ====================================================
-                # اگر Daily صعودی نیست، این ارز رو رد کن
+                # اگر Daily نه صعودی و نه نزولی است، رد کن
                 # ====================================================
-                if not is_daily_bullish:
+                if not is_daily_bullish and not is_daily_bearish:
                     logger.warning(
-                        f"🚫 [{symbol}] Daily صعودی نیست ({daily_bias}). خرید فیلتر شد."
+                        f"🚫 [{symbol}] Daily خنثی است ({daily_bias}). رد شد."
                     )
                     continue
 
                 # ====================================================
-                # دریافت 1H (فقط اگر Daily صعودی بود)
+                # دریافت 1H (فقط اگر Daily صعودی یا نزولی بود)
                 # ====================================================
 
                 df = get_nobitex_data(
@@ -1639,9 +1738,6 @@ def monitor_market():
 
                 # ====================================================
                 # مقدار پیش‌فرض target_day
-                #
-                # مهم:
-                # دیگر مقدار target_day ارز قبلی به این ارز منتقل نمی‌شود
                 # ====================================================
 
                 target_day = position.get(
@@ -1730,6 +1826,71 @@ def monitor_market():
                     )
 
                 # ====================================================
+                # اگر پوزیشن SHORT داریم
+                # ====================================================
+
+                elif position.get("signal") == "SHORT":
+
+                    color_code = RED
+
+                    status_display = "SHORT (OCO active)"
+
+                    p_entry = float(
+                        position.get(
+                            "entry_price",
+                            0
+                        ) or 0
+                    )
+
+                    p_target = float(
+                        position.get(
+                            "target_price",
+                            0
+                        ) or 0
+                    )
+
+                    p_stop = float(
+                        position.get(
+                            "stop_price",
+                            0
+                        ) or 0
+                    )
+
+                    target_day = position.get(
+                        "target_day",
+                        0.0
+                    )
+
+                    calc_qty = (
+                        BUDGET_TOMAN / p_entry
+                        if p_entry > 0
+                        else 0.0
+                    )
+
+                    potential_profit = (
+                        (p_entry - p_target)
+                        * calc_qty
+                        if p_entry > 0
+                        else 0.0
+                    )
+
+                    potential_loss = (
+                        (p_stop - p_entry)
+                        * calc_qty
+                        if p_entry > 0
+                        else 0.0
+                    )
+
+                    position_details = (
+                        f" | تعداد: {calc_qty:<8.3f}"
+                        f" | هدف: {p_target:<10,}"
+                        f" | استاپ: {p_stop:<10,}"
+                        f" | سود احتمالی: +{int(potential_profit):,} تومان"
+                        f" | زیان احتمالی: -{int(potential_loss):,} تومان"
+                        f" | بازه زمانی رسیدن به هدف: {target_day}"
+                    )
+
+                # ====================================================
                 # SELL signal
                 # ====================================================
 
@@ -1798,8 +1959,6 @@ def monitor_market():
                             f"خروج به دلیل انقضای زمان."
                         )
 
-                        # ... (باقی کد یکسان است)
-
                         continue
 
                     # =================================================
@@ -1819,8 +1978,6 @@ def monitor_market():
                                 f"لمس شد."
                             )
 
-                            # ... (باقی کد یکسان است)
-
                             continue
 
                         # =================================================
@@ -1838,7 +1995,74 @@ def monitor_market():
                                 f"لمس شد."
                             )
 
-                            # ... (باقی کد یکسان است)
+                            continue
+
+                # ====================================================
+                # مدیریت پوزیشن SHORT
+                # ====================================================
+
+                if position.get("signal") == "SHORT":
+
+                    entry_time_str = position.get(
+                        "updated_at",
+                        "نامشخص"
+                    )
+
+                    hours_held = (
+                        get_hours_since_entry(
+                            entry_time_str
+                        )
+                        if entry_time_str != "نامشخص"
+                        else 0
+                    )
+
+                    # =================================================
+                    # 1. خروج زمانی
+                    # =================================================
+
+                    if hours_held >= MAX_HOLD_HOURS:
+                        logger.warning(
+                            f"⏰ [{symbol}] بیش از "
+                            f"{MAX_HOLD_HOURS:.0f} ساعت بدون رسیدن "
+                            f"به هدف/استاپ سپری شد. "
+                            f"خروج به دلیل انقضای زمان."
+                        )
+
+                        continue
+
+                    # =================================================
+                    # 2. Stop Loss برای SHORT
+                    # =================================================
+
+                    if PAPER_TRADING:
+
+                        if (
+                                p_stop > 0
+                                and price_in_toman >= p_stop
+                        ):
+                            logger.warning(
+                                f"📉 حد ضرر SHORT فرضی برای {symbol} "
+                                f"در قیمت "
+                                f"{price_in_toman:,.0f} تومان "
+                                f"لمس شد."
+                            )
+
+                            continue
+
+                        # =================================================
+                        # 3. Take Profit برای SHORT
+                        # =================================================
+
+                        if (
+                                p_target > 0
+                                and price_in_toman <= p_target
+                        ):
+                            logger.info(
+                                f"🎯 حد سود SHORT فرضی برای {symbol} "
+                                f"در قیمت "
+                                f"{price_in_toman:,.0f} تومان "
+                                f"لمس شد."
+                            )
 
                             continue
 
@@ -2214,6 +2438,188 @@ def monitor_market():
                             f"{order_id} در نوبیتکس پر نشد! "
                             f"پوزیشن ذخیره نشد."
                         )
+
+                # ====================================================
+                # صدور SHORT جدید
+                # منطق: Daily نزولی + 1H SELL سیگنال + 1H نزولی Bias
+                # ====================================================
+
+                if (
+                        current_signal == "SELL"
+                        and position.get("signal") != "SHORT"
+                        and is_daily_bearish
+                ):
+
+                    # بررسی شرط‌های الزامی
+                    if ut_bias_1h != "BEARISH":
+                        logger.warning(
+                            f"🚫 [{symbol}] SHORT رد شد | "
+                            f"1H Bias نزولی نیست ({ut_bias_1h})"
+                        )
+                        continue
+
+                    logger.info(
+                        f"🔴 [{symbol}] SHORT تأیید شد! | "
+                        f"✅ Daily = {daily_bias} | "
+                        f"✅ 1H Signal = SELL | "
+                        f"✅ 1H Bias = {ut_bias_1h}"
+                    )
+
+                    if (
+                            open_positions_count
+                            >= MAX_OPEN_POSITIONS
+                    ):
+                        logger.warning(
+                            f"⚠️ سیگنال SHORT {symbol} رد شد. "
+                            f"سقف پوزیشن‌های باز "
+                            f"({MAX_OPEN_POSITIONS}) پر است."
+                        )
+
+                        continue
+
+                    # محاسبه target و stop برای SHORT
+                    dollar_price_now = (
+                        get_iran_dollar_price()
+                    )
+
+                    if dollar_price_now is None:
+                        logger.error(
+                            f"❌ فروش کوتاه {symbol} به دلیل "
+                            f"قطع ناگهانی شبکه لغو شد."
+                        )
+
+                        continue
+
+                    dollar_price = dollar_price_now
+
+                    t_entry, t_target, t_stop = (
+                        simulate_short_trade(
+                            symbol,
+                            current_price,
+                            atr_value,
+                            dollar_price,
+                            df
+                        )
+                    )
+
+                    result = estimate_target_time(
+                        t_entry,
+                        t_target,
+                        atr_value * dollar_price,
+                        1
+                    )
+
+                    eta_str = "نامشخص"
+
+                    if result:
+                        candles, hours, days = result
+
+                        eta_str = (
+                            f"{days:.1f} روز "
+                            f"({hours:.1f} ساعت / "
+                            f"~{candles:.1f} کندل)"
+                        )
+
+                        logger.info(
+                            f"⏳ زمان تقریبی رسیدن به تارگت SHORT "
+                            f"برای {symbol}: {eta_str}"
+                        )
+
+                    print(
+                        f"{RED}"
+                        f"⏳ [{symbol}] زمان تقریبی رسیدن "
+                        f"به هدف (SHORT): {eta_str}"
+                        f"{RESET}"
+                    )
+
+                    profit_pct = (
+                        (t_entry - t_target)
+                        / t_entry
+                        if t_entry > 0
+                        else 0.0
+                    )
+
+                    loss_pct = (
+                        (t_stop - t_entry)
+                        / t_entry
+                        if t_entry > 0
+                        else 0.0
+                    )
+
+                    final_target = int(
+                        price_in_toman
+                        * (1 - profit_pct)
+                    )
+
+                    final_stop = int(
+                        price_in_toman
+                        * (1 + loss_pct)
+                    )
+
+                    # ذخیره پوزیشن SHORT
+                    now_str = (
+                        jdatetime.datetime.now()
+                        .strftime(
+                            "%Y-%m-%d %H:%M:%S"
+                        )
+                    )
+
+                    real_quantity = BUDGET_TOMAN / price_in_toman
+
+                    last_signals[symbol] = {
+                        "signal": "SHORT",
+                        "entry_price": int(price_in_toman),
+                        "target_price": final_target,
+                        "stop_price": final_stop,
+                        "oco_order_id": None,
+                        "updated_at": now_str,
+                        "signal_time": signal_time_str,
+                        "target_day": eta_str,
+                        "trade_history": position.get("trade_history", [])
+                    }
+
+                    save_last_signals(last_signals)
+
+                    last_nobitex_update = 0
+
+                    open_positions_count += 1
+
+                    trade_mode = (
+                        "تست فرضی (Paper)"
+                        if PAPER_TRADING
+                        else "معامله واقعی"
+                    )
+
+                    rows_data = [
+                        ("جفت ارز", symbol),
+                        ("حالت معامله", trade_mode),
+                        ("قیمت فروش کوتاه", f"{int(price_in_toman):,} تومان"),
+                        ("تارگت (هدف)", f"{final_target:,} تومان"),
+                        ("استاپ لاس", f"{final_stop:,} تومان"),
+                        ("زمان تقریبی رسیدن به هدف", eta_str),
+                        ("مقدار SHORT", f"{real_quantity:.4f}"),
+                        ("زمان سیگنال", signal_time_str),
+                        ("زمان ثبت SHORT", now_str),
+                        ("تأیید Daily (نزولی)", "✅ بله"),
+                        ("سیگنال ورود 1H", "🔴 SELL"),
+                        ("Bias 1H", f"📉 {ut_bias_1h}")
+                    ]
+
+                    send_beautiful_email(
+                        subject=(
+                            f"🔴 سیگنال SHORT "
+                            f"{symbol} "
+                            f"({trade_mode})"
+                        ),
+                        title=(
+                            f"فروش کوتاه موفقیت‌آمیز "
+                            f"{symbol}"
+                        ),
+                        type_color="#ef4444",
+                        rows_data=rows_data
+                    )
+
+                    logger.info(f"🔴 SHORT برای {symbol} ثبت شد.")
 
                 # ====================================================
                 # فاصله کوتاه بین ارزها
