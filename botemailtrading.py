@@ -1040,8 +1040,18 @@ def simulate_short_trade(
     if atr_value <= 0:
         raise ValueError(f"[{symbol}] ATR نامعتبر است.")
 
-    # استاپ برای SHORT بالاتر است (نه پایین‌تر)
-    stop_raw = current_price + (atr_multiplier * atr_value)
+    # ✅ اصلاح: بررسی منطقی‌بودن استاپ برای ارزهای ارزان
+    stop_raw_initial = current_price + (atr_multiplier * atr_value)
+
+    if stop_raw_initial > current_price * 3:
+        logger.warning(
+            f"⚠️ [{symbol}] استاپ غیرمعقول محاسبه شد "
+            f"({stop_raw_initial:.8f}). "
+            f"استفاده از حد ۵٪ بالاتر از ورود."
+        )
+        stop_raw = current_price * 1.05
+    else:
+        stop_raw = stop_raw_initial
 
     risk_amount = stop_raw - current_price
     target_raw = current_price - (risk_amount * risk_reward)
@@ -2532,28 +2542,15 @@ def monitor_market():
                         f"{RESET}"
                     )
 
-                    profit_pct = (
-                        (t_entry - t_target)
-                        / t_entry
-                        if t_entry > 0
-                        else 0.0
-                    )
+                    # ✅ اصلاح: استفاده مستقیم از t_entry, t_target, t_stop
+                    final_target = int(t_target)
+                    final_stop = int(t_stop)
 
-                    loss_pct = (
-                        (t_stop - t_entry)
-                        / t_entry
-                        if t_entry > 0
-                        else 0.0
-                    )
-
-                    final_target = int(
-                        price_in_toman
-                        * (1 - profit_pct)
-                    )
-
-                    final_stop = int(
-                        price_in_toman
-                        * (1 + loss_pct)
+                    logger.info(
+                        f"🔴 SHORT [{symbol}] "
+                        f"ورود: {int(t_entry):,} تومان | "
+                        f"تارگت: {final_target:,} تومان | "
+                        f"استاپ: {final_stop:,} تومان"
                     )
 
                     # ذخیره پوزیشن SHORT
@@ -2564,11 +2561,11 @@ def monitor_market():
                         )
                     )
 
-                    real_quantity = BUDGET_TOMAN / price_in_toman
+                    real_quantity = BUDGET_TOMAN / int(t_entry)
 
                     last_signals[symbol] = {
                         "signal": "SHORT",
-                        "entry_price": int(price_in_toman),
+                        "entry_price": int(t_entry),
                         "target_price": final_target,
                         "stop_price": final_stop,
                         "oco_order_id": None,
@@ -2593,7 +2590,7 @@ def monitor_market():
                     rows_data = [
                         ("جفت ارز", symbol),
                         ("حالت معامله", trade_mode),
-                        ("قیمت فروش کوتاه", f"{int(price_in_toman):,} تومان"),
+                        ("قیمت فروش کوتاه", f"{int(t_entry):,} تومان"),
                         ("تارگت (هدف)", f"{final_target:,} تومان"),
                         ("استاپ لاس", f"{final_stop:,} تومان"),
                         ("زمان تقریبی رسیدن به هدف", eta_str),
