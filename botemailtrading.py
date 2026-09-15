@@ -598,295 +598,91 @@ def get_kucoin_data(symbol, timeframe, limit=300):
 
 
 def calculate_ut_bot_1h_live(df, sensitivity=3, atr_period=10):
+    """UT Bot بدون repaint؛ سیگنال فقط روی کندل بسته‌شده معتبر است."""
     import numpy as np
     import pandas as pd
     import ta
 
-    df = df.copy()
-
-    required_columns = [
-        'open',
-        'high',
-        'low',
-        'close',
-        'volume'
-    ]
-
-    missing = [
-        col for col in required_columns
-        if col not in df.columns
-    ]
-
+    required = ['open', 'high', 'low', 'close', 'volume']
+    missing = [c for c in required if c not in df.columns]
     if missing:
-        raise ValueError(
-            f"ستون‌های زیر در DataFrame وجود ندارند: {missing}"
-        )
+        raise ValueError(f"ستون‌های ضروری وجود ندارند: {missing}")
 
-    for col in required_columns:
-        df[col] = pd.to_numeric(
-            df[col],
-            errors='coerce'
-        )
+    out = df.copy()
+    for c in required:
+        out[c] = pd.to_numeric(out[c], errors='coerce')
+    out = out.dropna(subset=['high', 'low', 'close']).copy()
 
-    df = df.dropna(
-        subset=['high', 'low', 'close']
-    ).copy()
-
-    min_bars = max(
-        atr_period + 20,
-        50
+    n = len(out)
+    out['ATR'] = ta.volatility.average_true_range(
+        out['high'], out['low'], out['close'], window=atr_period, fillna=False
     )
+    out['nLoss'] = out['ATR'] * float(sensitivity)
+    out['TrailingStop'] = np.nan
+    out['UT_Position'] = 0
+    out['signal'] = 'HOLD'
 
-    if len(df) < min_bars:
-        df['ATR'] = np.nan
-        df['TrailingStop'] = np.nan
-        df['UT_Position'] = 0
-        df['signal'] = 'HOLD'
-        df['UT_Bias'] = 'NEUTRAL'
-        df['Volume_MA'] = df['volume'].rolling(20).mean()
-        df['RSI'] = ta.momentum.rsi(
-            df['close'],
-            window=14
-        )
-        return df
+    if n == 0:
+        out['UT_Bias'] = 'NEUTRAL'
+        out['Volume_MA'] = out['volume'].rolling(20).mean()
+        out['RSI'] = ta.momentum.rsi(out['close'], window=14)
+        return out.drop(columns=['nLoss'], errors='ignore')
 
-    # =========================================================
-    # ATR - Wilder
-    # =========================================================
+    close = out['close'].to_numpy(dtype=float)
+    loss = out['nLoss'].to_numpy(dtype=float)
+    stop = np.full(n, np.nan, dtype=float)
+    pos = np.zeros(n, dtype=int)
+    sig = np.full(n, 'HOLD', dtype=object)
 
-    df['ATR'] = ta.volatility.average_true_range(
-        high=df['high'],
-        low=df['low'],
-        close=df['close'],
-        window=atr_period,
-        fillna=False
+    valid = np.flatnonzero(np.isfinite(loss) & (loss > 0))
+    if len(valid):
+        first = int(valid[0])
+        stop[first] = close[first] - loss[first]
+        pos[first] = 1
+
+        for i in range(first + 1, n):
+            if not np.isfinite(loss[i]) or loss[i] <= 0 or not np.isfinite(stop[i-1]):
+                stop[i] = stop[i-1]
+                pos[i] = pos[i-1]
+                continue
+
+            prev_close = close[i-1]
+            cur_close = close[i]
+            prev_stop = stop[i-1]
+
+            if cur_close > prev_stop and prev_close > prev_stop:
+                stop[i] = max(prev_stop, cur_close - loss[i])
+            elif cur_close < prev_stop and prev_close < prev_stop:
+                stop[i] = min(prev_stop, cur_close + loss[i])
+            elif cur_close > prev_stop:
+                stop[i] = cur_close - loss[i]
+            else:
+                stop[i] = cur_close + loss[i]
+
+            if prev_close <= prev_stop and cur_close > prev_stop:
+                pos[i] = 1
+                sig[i] = 'BUY'
+            elif prev_close >= prev_stop and cur_close < prev_stop:
+                pos[i] = -1
+                sig[i] = 'SELL'
+            else:
+                pos[i] = pos[i-1]
+
+    out['TrailingStop'] = stop
+    out['UT_Position'] = pos
+    out['signal'] = sig
+    out['UT_Bias'] = np.select(
+        [out['close'] > out['TrailingStop'], out['close'] < out['TrailingStop']],
+        ['BULLISH', 'BEARISH'], default='NEUTRAL'
     )
+    out['Volume_MA'] = out['volume'].rolling(20).mean()
+    out['RSI'] = ta.momentum.rsi(out['close'], window=14)
 
-    df['nLoss'] = (
-        df['ATR'] * sensitivity
-    )
+    # کندل در حال تشکیل هرگز سیگنال قابل معامله ندارد.
+    if len(out) >= 1:
+        out.iloc[-1, out.columns.get_loc('signal')] = 'HOLD'
 
-    close = df['close'].astype(float).values
-    nloss = df['nLoss'].astype(float).values
-
-    length = len(df)
-
-    trailing_stop = np.full(
-        length,
-        np.nan,
-        dtype=float
-    )
-
-    position = np.zeros(
-        length,
-        dtype=int
-    )
-
-    signals = np.array(
-        ['HOLD'] * length,
-        dtype=object
-    )
-
-    valid_indices = np.where(
-        np.isfinite(nloss) &
-        (nloss > 0)
-    )[0]
-
-    if len(valid_indices) == 0:
-        df['TrailingStop'] = np.nan
-        df['UT_Position'] = 0
-        df['signal'] = 'HOLD'
-        df['UT_Bias'] = 'NEUTRAL'
-
-        df['Volume_MA'] = (
-            df['volume']
-            .rolling(20)
-            .mean()
-        )
-
-        df['RSI'] = ta.momentum.rsi(
-            df['close'],
-            window=14
-        )
-
-        df.drop(
-            columns=['nLoss'],
-            inplace=True
-        )
-
-        return df
-
-    # =========================================================
-    # مقدار اولیه
-    # =========================================================
-
-    first = valid_indices[0]
-
-    trailing_stop[first] = (
-        close[first] - nloss[first]
-    )
-
-    position[first] = 1
-
-    # =========================================================
-    # UT Bot
-    # =========================================================
-
-    for i in range(first + 1, length):
-
-        current_close = close[i]
-        previous_close = close[i - 1]
-
-        current_loss = nloss[i]
-        previous_stop = trailing_stop[i - 1]
-
-        if (
-            not np.isfinite(current_loss)
-            or current_loss <= 0
-            or not np.isfinite(previous_stop)
-        ):
-            trailing_stop[i] = previous_stop
-            position[i] = position[i - 1]
-            continue
-
-        # -----------------------------------------------------
-        # xATRTrailingStop
-        # -----------------------------------------------------
-
-        if (
-            current_close > previous_stop
-            and previous_close > previous_stop
-        ):
-
-            trailing_stop[i] = max(
-                previous_stop,
-                current_close - current_loss
-            )
-
-        elif (
-            current_close < previous_stop
-            and previous_close < previous_stop
-        ):
-
-            trailing_stop[i] = min(
-                previous_stop,
-                current_close + current_loss
-            )
-
-        elif current_close > previous_stop:
-
-            trailing_stop[i] = (
-                current_close - current_loss
-            )
-
-        else:
-
-            trailing_stop[i] = (
-                current_close + current_loss
-            )
-
-        # -----------------------------------------------------
-        # Position
-        # -----------------------------------------------------
-
-        if (
-            previous_close <= previous_stop
-            and current_close > previous_stop
-        ):
-
-            position[i] = 1
-
-        elif (
-            previous_close >= previous_stop
-            and current_close < previous_stop
-        ):
-
-            position[i] = -1
-
-        else:
-
-            position[i] = position[i - 1]
-
-        # -----------------------------------------------------
-        # Signal
-        # -----------------------------------------------------
-
-        if (
-            previous_close <= previous_stop
-            and current_close > trailing_stop[i]
-        ):
-
-            signals[i] = 'BUY'
-
-        elif (
-            previous_close >= previous_stop
-            and current_close < trailing_stop[i]
-        ):
-
-            signals[i] = 'SELL'
-
-        else:
-
-            signals[i] = 'HOLD'
-
-    # =========================================================
-    # ذخیره نتایج
-    # =========================================================
-
-    df['TrailingStop'] = trailing_stop
-    df['UT_Position'] = position
-    df['signal'] = signals
-
-    # =========================================================
-    # UT Bias
-    # =========================================================
-
-    df['UT_Bias'] = 'NEUTRAL'
-
-    df.loc[
-        df['close'] > df['TrailingStop'],
-        'UT_Bias'
-    ] = 'BULLISH'
-
-    df.loc[
-        df['close'] < df['TrailingStop'],
-        'UT_Bias'
-    ] = 'BEARISH'
-
-    # =========================================================
-    # اطلاعات کمکی
-    # =========================================================
-
-    df['Volume_MA'] = (
-        df['volume']
-        .rolling(20)
-        .mean()
-    )
-
-    df['RSI'] = ta.momentum.rsi(
-        close=df['close'],
-        window=14
-    )
-
-    # =========================================================
-    # آخرین کندل = در حال تشکیل
-    # سیگنال آن معتبر نیست
-    # =========================================================
-
-    df.iloc[
-        -1,
-        df.columns.get_loc('signal')
-    ] = 'HOLD'
-
-    df.drop(
-        columns=['nLoss'],
-        inplace=True
-    )
-
-    return df
-
-
-
+    return out.drop(columns=['nLoss'], errors='ignore')
 
 def estimate_target_time(entry_price, target_price, atr_value, timeframe_hours=1):
     if entry_price <= 0 or target_price <= entry_price or atr_value <= 0:
@@ -1323,7 +1119,7 @@ def monitor_market():
         "BASED/USDT",
         "ONE/USDT", "BICO/USDT", "NOT/USDT", "KAITO/USDT",
         "PUMP/USDT", "BARD/USDT", "PROM/USDT", "LA/USDT",
-        "ZAMA/USDT", "HOME/USDT","XAUT/USDT","TURBO/USDT",
+        "ZAMA/USDT", "HOME/USDT","XAUT/USDT","TURBO/USDT","T/USDT"
     ]
 
     DB_FILE = "live_signals_v2.json"
@@ -1558,6 +1354,7 @@ def monitor_market():
                 )
 
                 current_signal = signal_row["signal"]
+                previous_signal = df.iloc[-3]["signal"] if len(df) >= 3 else "HOLD"
 
                 atr_value = float(
                     signal_row["ATR"]
@@ -1849,6 +1646,7 @@ def monitor_market():
 
                 if (
                         current_signal == "BUY"
+                        and previous_signal != "BUY"
                         and position.get("signal") != "BUY"
                 ):
 
