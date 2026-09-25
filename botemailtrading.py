@@ -596,7 +596,6 @@ def get_kucoin_data(symbol, timeframe, limit=300):
         return None
 
 
-
 def calculate_ut_bot_1h_live(df, sensitivity=3, atr_period=10):
     """UT Bot بدون repaint؛ سیگنال فقط روی کندل بسته‌شده معتبر است."""
     import numpy as np
@@ -641,14 +640,14 @@ def calculate_ut_bot_1h_live(df, sensitivity=3, atr_period=10):
         pos[first] = 1
 
         for i in range(first + 1, n):
-            if not np.isfinite(loss[i]) or loss[i] <= 0 or not np.isfinite(stop[i-1]):
-                stop[i] = stop[i-1]
-                pos[i] = pos[i-1]
+            if not np.isfinite(loss[i]) or loss[i] <= 0 or not np.isfinite(stop[i - 1]):
+                stop[i] = stop[i - 1]
+                pos[i] = pos[i - 1]
                 continue
 
-            prev_close = close[i-1]
+            prev_close = close[i - 1]
             cur_close = close[i]
-            prev_stop = stop[i-1]
+            prev_stop = stop[i - 1]
 
             if cur_close > prev_stop and prev_close > prev_stop:
                 stop[i] = max(prev_stop, cur_close - loss[i])
@@ -666,7 +665,7 @@ def calculate_ut_bot_1h_live(df, sensitivity=3, atr_period=10):
                 pos[i] = -1
                 sig[i] = 'SELL'
             else:
-                pos[i] = pos[i-1]
+                pos[i] = pos[i - 1]
 
     out['TrailingStop'] = stop
     out['UT_Position'] = pos
@@ -684,6 +683,7 @@ def calculate_ut_bot_1h_live(df, sensitivity=3, atr_period=10):
 
     return out.drop(columns=['nLoss'], errors='ignore')
 
+
 def estimate_target_time(entry_price, target_price, atr_value, timeframe_hours=1):
     if entry_price <= 0 or target_price <= entry_price or atr_value <= 0:
         return 1, timeframe_hours, timeframe_hours / 24
@@ -699,7 +699,6 @@ def estimate_target_time(entry_price, target_price, atr_value, timeframe_hours=1
     days = hours / 24
 
     return estimated_candles, hours, days
-
 
 
 def simulate_oco_trade(
@@ -1044,10 +1043,11 @@ def maxhad(symbol):
     url = "https://apiv2.nobitex.ir/market/stats"
     headers = {"Authorization": f"Token {NOBITEX_TOKEN_PUBLIC}", "Content-Type": "application/json"}
     stat_name = "dayHigh"
+    currency = symbol.split("/")[0].upper()
     # print(symbol)
     # پارامترها به جای بدنه، به صورت Query Parameters ارسال می‌شوند
     params = {
-        "srcCurrency": symbol.upper(),  # معمولاً حروف کوچک می‌خواهد (مثل eth)
+        "srcCurrency": currency,  # معمولاً حروف کوچک می‌خواهد (مثل eth)
         "dstCurrency": "irt",  # اگر بازار تتری است یا ریل (irt)
     }
 
@@ -1058,7 +1058,7 @@ def maxhad(symbol):
         if response_data.get("status") == "ok":
             stats_data = response_data.get("stats", {})  # بسته به ساختار JSON پاسخ نوبیتکس
             # print(stats_data)
-            market_key = f"{symbol.upper()}-irt"
+            market_key = f"{currency}-irt"
 
             market_info = stats_data.get(market_key, {})
             # استخراج مقدار مورد نظر (پیش‌فرض روی dayHigh)
@@ -1076,10 +1076,12 @@ def minhad(symbol):
     url = "https://apiv2.nobitex.ir/market/stats"
     headers = {"Authorization": f"Token {NOBITEX_TOKEN_PUBLIC}", "Content-Type": "application/json"}
     stat_name = "dayLow"
+    currency = symbol.split("/")[0].upper()
+
     # print(symbol)
     # پارامترها به جای بدنه، به صورت Query Parameters ارسال می‌شوند
     params = {
-        "srcCurrency": symbol.upper(),  # معمولاً حروف کوچک می‌خواهد (مثل eth)
+        "srcCurrency": currency,  # معمولاً حروف کوچک می‌خواهد (مثل eth)
         "dstCurrency": "irt",  # اگر بازار تتری است یا ریل (irt)
     }
 
@@ -1090,7 +1092,7 @@ def minhad(symbol):
         if response_data.get("status") == "ok":
             stats_data = response_data.get("stats", {})  # بسته به ساختار JSON پاسخ نوبیتکس
             # print(stats_data)
-            market_key = f"{symbol.upper()}-irt"
+            market_key = f"{currency}-irt"
 
             market_info = stats_data.get(market_key, {})
             # استخراج مقدار مورد نظر (پیش‌فرض روی dayHigh)
@@ -1119,7 +1121,8 @@ def monitor_market():
         "BASED/USDT",
         "ONE/USDT", "BICO/USDT", "NOT/USDT", "KAITO/USDT",
         "PUMP/USDT", "BARD/USDT", "PROM/USDT", "LA/USDT",
-        "ZAMA/USDT", "HOME/USDT","XAUT/USDT","TURBO/USDT","T/USDT"
+        "ZAMA/USDT", "HOME/USDT", "XAUT/USDT", "TURBO/USDT", "T/USDT", "ZIL/USDT", "PLUM/USDT", "GRASS/USDT",
+        "FORM/USDT"
     ]
 
     DB_FILE = "live_signals_v2.json"
@@ -1135,31 +1138,20 @@ def monitor_market():
 
         current_now = datetime.now()
 
-        current_time_str = jdatetime.datetime.now().strftime(
-            "%Y-%m-%d %H:%M:%S"
-        )
+        current_time_str = jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        print(
-            f"\n🔄 --- چرخه پایش آنی بازار "
-            f"(چندتایم‌فریمه): {current_time_str} ---"
-        )
+        print(f"\n🔄 --- چرخه پایش آنی بازار (چندتایم‌فریمه): {current_time_str} ---")
 
         # ============================================================
         # گزارش روزانه
         # ============================================================
 
-        if (
-                current_now.hour == 0
-                and current_now.minute == 0
-                and last_report_date != current_now.date()
-        ):
+        if (current_now.hour == 0 and current_now.minute == 0 and last_report_date != current_now.date()):
             try:
                 generate_daily_report(file_path=DB_FILE)
 
             except Exception as e:
-                logger.error(
-                    f"⚠️ خطا در تولید گزارش روزانه: {e}"
-                )
+                logger.error(f"⚠️ خطا در تولید گزارش روزانه: {e}")
 
             last_report_date = current_now.date()
 
@@ -1169,14 +1161,8 @@ def monitor_market():
 
         current_timestamp = time.time()
 
-        if (
-                current_timestamp - last_nobitex_update > 600
-                or dollar_price is None
-        ):
-            logger.info(
-                "🔄 در حال به‌روزرسانی اطلاعات عمومی "
-                "از نوبیتکس (قیمت تتر و موجودی)..."
-            )
+        if (current_timestamp - last_nobitex_update > 600 or dollar_price is None):
+            logger.info("🔄 در حال به‌روزرسانی اطلاعات عمومی از نوبیتکس (قیمت تتر و موجودی)...")
 
             dollar_price = get_iran_dollar_price()
 
@@ -1191,10 +1177,7 @@ def monitor_market():
         # ============================================================
 
         if dollar_price is None:
-            logger.warning(
-                "⚠️ به دلیل عدم دسترسی به قیمت زنده تتر، "
-                "این چرخه معاملاتی رد می‌شود."
-            )
+            logger.warning("⚠️ به دلیل عدم دسترسی به قیمت زنده تتر، این چرخه معاملاتی رد می‌شود.")
 
             print("💤 استراحت ۶۰ ثانیه‌ای تا چرخه بعدی...")
 
@@ -1202,27 +1185,16 @@ def monitor_market():
 
             continue
 
-        print(
-            f"  قیمت دلار (تومان): {dollar_price:,} "
-            f" موجودی حساب شما : {current_wallet:.2f}"
-        )
+        print(f"  قیمت دلار (تومان): {dollar_price:,}  موجودی حساب شما : {current_wallet:.2f}")
 
-        print(
-            "---------------------------------------------------------------------------------"
-        )
+        print("---------------------------------------------------------------------------------")
 
         # ============================================================
         # محاسبه تعداد پوزیشن‌های باز
         # ============================================================
 
-        open_positions_count = sum(
-            1
-            for sym in symbols
-            if (
-                    isinstance(last_signals.get(sym), dict)
-                    and last_signals[sym].get("signal") == "BUY"
-            )
-        )
+        open_positions_count = sum(1 for sym in symbols if (
+                    isinstance(last_signals.get(sym), dict) and last_signals[sym].get("signal") == "BUY"))
 
         log_lines_buffer = []
 
@@ -1246,31 +1218,19 @@ def monitor_market():
                 # دریافت Daily ابتدا
                 # ====================================================
 
-                df_1d = get_nobitex_data(
-                    symbol,
-                    timeframe="1d",
-                    limit=100
-                )
+                df_1d = get_nobitex_data(symbol, timeframe="1d", limit=100)
 
                 daily_bias = "NEUTRAL"
                 is_daily_bullish = False
 
-                if (
-                        df_1d is not None
-                        and not df_1d.empty
-                        and len(df_1d) >= 50
-                ):
+                if (df_1d is not None and not df_1d.empty and len(df_1d) >= 50):
                     # تبدیل Daily به تومان
                     df_1d_toman = df_1d.copy()
                     for col in ['open', 'high', 'low', 'close']:
                         df_1d_toman[col] = df_1d[col] * dollar_price
 
                     # محاسبه UT Bot روی Daily
-                    df_1d_toman = calculate_ut_bot_1h_live(
-                        df_1d_toman,
-                        sensitivity=3,
-                        atr_period=10
-                    )
+                    df_1d_toman = calculate_ut_bot_1h_live(df_1d_toman, sensitivity=3, atr_period=10)
 
                     # آخرین کندل Daily بسته شده
                     daily_row = df_1d_toman.iloc[-2]
@@ -1278,15 +1238,11 @@ def monitor_market():
 
                     is_daily_bullish = (daily_bias == "BULLISH")
 
-                    logger.info(
-                        f"📅 [{symbol}] Daily Bias: {daily_bias}"
-                    )
+                    logger.info(f"📅 [{symbol}] Daily Bias: {daily_bias}")
 
                 else:
 
-                    logger.warning(
-                        f"⚠️ [{symbol}] اطلاعات Daily کافی نیست."
-                    )
+                    logger.warning(f"⚠️ [{symbol}] اطلاعات Daily کافی نیست.")
 
                     # اگر Daily موجود نبود، ادامه نده
                     continue
@@ -1295,44 +1251,29 @@ def monitor_market():
                 # اگر Daily صعودی نیست، این ارز رو رد کن
                 # ====================================================
                 if not is_daily_bullish:
-                    logger.warning(
-                        f"🚫 [{symbol}] Daily صعودی نیست ({daily_bias}). خرید فیلتر شد."
-                    )
+                    logger.warning(f"🚫 [{symbol}] Daily صعودی نیست ({daily_bias}). خرید فیلتر شد.")
                     continue
 
                 # ====================================================
                 # دریافت 1H (فقط اگر Daily صعودی بود)
                 # ====================================================
 
-                df = get_nobitex_data(
-                    symbol,
-                    timeframe="1h",
-                    limit=300
-                )
+                df = get_nobitex_data(symbol, timeframe="1h", limit=300)
 
-                if (
-                        df is None
-                        or df.empty
-                        or len(df) < 60
-                ):
+                if (df is None or df.empty or len(df) < 60):
                     continue
 
                 # ====================================================
                 # تبدیل 1H به تومان
                 # ====================================================
                 df_toman = df.copy()
-                for col in ['open', 'high', 'low', 'close']:
-                    df_toman[col] = df[col] * dollar_price
+                for col in ['open', 'high', 'low', 'close']: df_toman[col] = df[col] * dollar_price
 
                 # ====================================================
                 # UT BOT 3/10 روی 1H
                 # ====================================================
 
-                df_toman = calculate_ut_bot_1h_live(
-                    df_toman,
-                    sensitivity=3,
-                    atr_period=10
-                )
+                df_toman = calculate_ut_bot_1h_live(df_toman, sensitivity=3, atr_period=10)
 
                 # کپی سیگنال‌ها به DataFrame اصلی
                 df['signal'] = df_toman['signal']
@@ -1349,16 +1290,12 @@ def monitor_market():
                 live_row = df.iloc[-1]
                 signal_row = df.iloc[-2]
 
-                current_price = float(
-                    live_row["close"]
-                )
+                current_price = float(live_row["close"])
 
                 current_signal = signal_row["signal"]
                 previous_signal = df.iloc[-3]["signal"] if len(df) >= 3 else "HOLD"
 
-                atr_value = float(
-                    signal_row["ATR"]
-                )
+                atr_value = float(signal_row["ATR"])
 
                 ut_bias_1h = signal_row["UT_Bias"]
 
@@ -1366,9 +1303,7 @@ def monitor_market():
 
                 # تبدیل زمان سیگنال به رشته قابل ذخیره
                 try:
-                    signal_time_str = str(
-                        signal_candle_timestamp
-                    )
+                    signal_time_str = str(signal_candle_timestamp)
                 except Exception:
                     signal_time_str = "نامشخص"
 
@@ -1376,31 +1311,22 @@ def monitor_market():
                 # قیمت واقعی نوبیتکس
                 # ====================================================
 
-                nobitex_real_price = get_nobitex_live_price(
-                    coin_name_lower
-                )
+                nobitex_real_price = get_nobitex_live_price(coin_name_lower)
 
                 if nobitex_real_price is not None:
 
-                    price_in_toman = float(
-                        nobitex_real_price
-                    )
+                    price_in_toman = float(nobitex_real_price)
 
                 elif (
                         current_price is not None
                         and dollar_price is not None
                 ):
 
-                    price_in_toman = (
-                            current_price * dollar_price
-                    )
+                    price_in_toman = (current_price * dollar_price)
 
                 else:
 
-                    logger.warning(
-                        f"⚠️ قیمت معتبر برای {symbol} "
-                        f"در دسترس نیست، این نماد رد شد."
-                    )
+                    logger.warning(f"⚠️ قیمت معتبر برای {symbol} در دسترس نیست، این نماد رد شد.")
 
                     continue
 
@@ -1441,10 +1367,7 @@ def monitor_market():
                 # دیگر مقدار target_day ارز قبلی به این ارز منتقل نمی‌شود
                 # ====================================================
 
-                target_day = position.get(
-                    "target_day",
-                    0.0
-                )
+                target_day = position.get("target_day", 0.0)
 
                 # ====================================================
                 # وضعیت نمایشی
@@ -1454,12 +1377,7 @@ def monitor_market():
 
                 status_display = "HOLD"
 
-                position_details = (
-                    " | تعداد: -        "
-                    "| هدف: -          "
-                    "| استاپ: -         "
-                    "| سود/زیان: -"
-                )
+                position_details = (" | تعداد: -        | هدف: -          | استاپ: -         | سود/زیان: -")
 
                 # ====================================================
                 # اگر پوزیشن BUY داریم
@@ -1471,51 +1389,19 @@ def monitor_market():
 
                     status_display = "BUY (OCO active)"
 
-                    p_entry = float(
-                        position.get(
-                            "entry_price",
-                            0
-                        ) or 0
-                    )
+                    p_entry = float(position.get("entry_price", 0) or 0)
 
-                    p_target = float(
-                        position.get(
-                            "target_price",
-                            0
-                        ) or 0
-                    )
+                    p_target = float(position.get("target_price", 0) or 0)
 
-                    p_stop = float(
-                        position.get(
-                            "stop_price",
-                            0
-                        ) or 0
-                    )
+                    p_stop = float(position.get("stop_price", 0) or 0)
 
-                    target_day = position.get(
-                        "target_day",
-                        0.0
-                    )
+                    target_day = position.get("target_day", 0.0)
 
-                    calc_qty = (
-                        BUDGET_TOMAN / p_entry
-                        if p_entry > 0
-                        else 0.0
-                    )
+                    calc_qty = (BUDGET_TOMAN / p_entry if p_entry > 0 else 0.0)
 
-                    potential_profit = (
-                        (p_target - p_entry)
-                        * calc_qty
-                        if p_entry > 0
-                        else 0.0
-                    )
+                    potential_profit = ((p_target - p_entry) * calc_qty if p_entry > 0 else 0.0)
 
-                    potential_loss = (
-                        (p_entry - p_stop)
-                        * calc_qty
-                        if p_entry > 0
-                        else 0.0
-                    )
+                    potential_loss = ((p_entry - p_stop) * calc_qty if p_entry > 0 else 0.0)
 
                     position_details = (
                         f" | تعداد: {calc_qty:<8.3f}"
@@ -1547,22 +1433,11 @@ def monitor_market():
                     f"{position_details}"
                 )
 
-                print(
-                    f"{color_code}"
-                    f"{clean_console_line}"
-                    f"{RESET}"
-                )
+                print(f"{color_code}{clean_console_line}{RESET}")
 
-                print(
-                    f"{color_code}"
-                    f"{'-' * 84}"
-                    f"{RESET}"
-                )
+                print(f"{color_code}{'-' * 84}{RESET}")
 
-                log_lines_buffer.append(
-                    f"{clean_console_line} "
-                    f"| زمان: {current_time_str}"
-                )
+                log_lines_buffer.append(f"{clean_console_line} | زمان: {current_time_str}")
 
                 # ====================================================
                 # مدیریت پوزیشن BUY
@@ -1570,18 +1445,9 @@ def monitor_market():
 
                 if position.get("signal") == "BUY":
 
-                    entry_time_str = position.get(
-                        "updated_at",
-                        "نامشخص"
-                    )
+                    entry_time_str = position.get("updated_at", "نامشخص")
 
-                    hours_held = (
-                        get_hours_since_entry(
-                            entry_time_str
-                        )
-                        if entry_time_str != "نامشخص"
-                        else 0
-                    )
+                    hours_held = (get_hours_since_entry(entry_time_str) if entry_time_str != "نامشخص" else 0)
 
                     # =================================================
                     # 1. خروج زمانی
@@ -1602,18 +1468,19 @@ def monitor_market():
                     # =================================================
                     # 2. Stop Loss - Paper
                     # =================================================
-
+                    max_24h=maxhad(symbol)
+                    min_24h=minhad(symbol)
+                    #print('maxhad: ',max_24h,' minhad:' , min_24h)
                     if PAPER_TRADING:
 
-                        if (
-                                p_stop > 0
-                                and price_in_toman <= p_stop
-                        ):
+                        if (p_stop > 0 and price_in_toman <= p_stop or min_24h <= p_stop) :
                             logger.warning(
                                 f"📉 حد ضرر فرضی برای {symbol} "
                                 f"در قیمت "
                                 f"{price_in_toman:,.0f} تومان "
                                 f"لمس شد."
+                                f"Stop={p_stop:,.0f} | "
+                                f"Low24h={min_24h:,.0f}"
                             )
 
                             # ... (باقی کد یکسان است)
@@ -1624,15 +1491,14 @@ def monitor_market():
                         # 3. Take Profit - Paper
                         # =================================================
 
-                        if (
-                                p_target > 0
-                                and price_in_toman >= p_target
-                        ):
+                        if (p_target > 0 and price_in_toman >= p_target or max_24h >= p_target):
                             logger.info(
                                 f"🎯 حد سود فرضی برای {symbol} "
                                 f"در قیمت "
                                 f"{price_in_toman:,.0f} تومان "
                                 f"لمس شد."
+                                f"Target={p_target:,.0f} | "
+                                f"High24h={max_24h:,.0f}"
                             )
 
                             # ... (باقی کد یکسان است)
@@ -1644,11 +1510,7 @@ def monitor_market():
                 # منطق: Daily صعودی + 1H BUY سیگنال + 1H صعودی Bias
                 # ====================================================
 
-                if (
-                        current_signal == "BUY"
-                        and previous_signal != "BUY"
-                        and position.get("signal") != "BUY"
-                ):
+                if (current_signal == "BUY" and previous_signal != "BUY" and position.get("signal") != "BUY"):
 
                     # =================================================
                     # بررسی شرط‌های الزامی
@@ -1656,18 +1518,12 @@ def monitor_market():
 
                     # 1. Daily باید صعودی باشد (فیلتر اساسی)
                     if not is_daily_bullish:
-                        logger.warning(
-                            f"🚫 [{symbol}] BUY رد شد | "
-                            f"Daily صعودی نیست ({daily_bias})"
-                        )
+                        logger.warning(f"🚫 [{symbol}] BUY رد شد | Daily صعودی نیست ({daily_bias})")
                         continue
 
                     # 2. 1H Bias باید صعودی باشد
                     if ut_bias_1h != "BULLISH":
-                        logger.warning(
-                            f"🚫 [{symbol}] BUY رد شد | "
-                            f"1H Bias صعودی نیست ({ut_bias_1h})"
-                        )
+                        logger.warning(f"🚫 [{symbol}] BUY رد شد | 1H Bias صعودی نیست ({ut_bias_1h})")
                         continue
 
                     # 3. 1H سیگنال باید BUY باشد
@@ -1705,34 +1561,15 @@ def monitor_market():
                     )
 
                     if dollar_price_now is None:
-                        logger.error(
-                            f"❌ خرید {symbol} به دلیل "
-                            f"قطع ناگهانی شبکه در لحظه "
-                            f"دریافت قیمت تتر لغو شد."
-                        )
+                        logger.error(f"❌ خرید {symbol} به دلیل قطع ناگهانی شبکه در لحظه دریافت قیمت تتر لغو شد.")
 
                         continue
 
-                    dollar_price = (
-                        dollar_price_now
-                    )
+                    dollar_price = (dollar_price_now)
 
-                    t_entry, t_target, t_stop = (
-                        simulate_oco_trade(
-                            symbol,
-                            current_price,
-                            atr_value,
-                            dollar_price,
-                            df
-                        )
-                    )
+                    t_entry, t_target, t_stop = (simulate_oco_trade(symbol, current_price, atr_value, dollar_price, df))
 
-                    result = estimate_target_time(
-                        t_entry,
-                        t_target,
-                        atr_value * dollar_price,
-                        1
-                    )
+                    result = estimate_target_time(t_entry, t_target, atr_value * dollar_price, 1)
 
                     eta_str = "نامشخص"
 
@@ -1745,10 +1582,7 @@ def monitor_market():
                             f"~{candles:.1f} کندل)"
                         )
 
-                        logger.info(
-                            f"⏳ زمان تقریبی رسیدن به تارگت "
-                            f"برای {symbol}: {eta_str}"
-                        )
+                        logger.info(f"⏳ زمان تقریبی رسیدن به تارگت برای {symbol}: {eta_str}")
 
                     print(
                         f"{GREEN}"
@@ -1757,95 +1591,47 @@ def monitor_market():
                         f"{RESET}"
                     )
 
-                    profit_pct = (
-                        (t_target - t_entry)
-                        / t_entry
-                        if t_entry > 0
-                        else 0.0
-                    )
+                    profit_pct = ((t_target - t_entry) / t_entry if t_entry > 0 else 0.0)
 
-                    loss_pct = (
-                        (t_entry - t_stop)
-                        / t_entry
-                        if t_entry > 0
-                        else 0.0
-                    )
+                    loss_pct = ((t_entry - t_stop) / t_entry if t_entry > 0 else 0.0)
 
-                    final_target = int(
-                        price_in_toman
-                        * (1 + profit_pct)
-                    )
+                    final_target = int(price_in_toman * (1 + profit_pct))
 
-                    final_stop = int(
-                        price_in_toman
-                        * (1 - loss_pct)
-                    )
+                    final_stop = int(price_in_toman * (1 - loss_pct))
 
-                    order_success, order_id = (
-                        place_buy_order_and_notify(
-                            symbol,
-                            price_in_toman,
-                            budget_toman=BUDGET_TOMAN
-                        )
-                    )
+                    order_success, order_id = (place_buy_order_and_notify(symbol, price_in_toman, budget_toman=BUDGET_TOMAN))
 
                     if not order_success:
-                        logger.error(
-                            f"❌ خرید {symbol} انجام نشد."
-                        )
+                        logger.error(f"❌ خرید {symbol} انجام نشد.")
 
                         continue
 
                     if PAPER_TRADING:
 
-                        real_quantity = (
-                                BUDGET_TOMAN
-                                / (price_in_toman * 1.002)
-                        )
+                        real_quantity = (BUDGET_TOMAN / (price_in_toman * 1.002))
 
-                        logger.info(
-                            f"✨ [Paper Trading] "
-                            f"خرید فرضی {symbol} شبیه‌سازی شد."
-                        )
+                        logger.info(f"✨ [Paper Trading] خرید فرضی {symbol} شبیه‌سازی شد.")
 
-                        logger.info(
-                            f"🛡️ [Paper Trading] "
-                            f"سفارش OCO فرضی برای "
-                            f"{symbol} ثبت شد."
-                        )
+                        logger.info(f"🛡️ [Paper Trading] سفارش OCO فرضی برای {symbol} ثبت شد.")
 
                     else:
 
                         real_quantity = 0.0
 
-                        logger.info(
-                            f"⏳ در حال استعلام دائم وضعیت "
-                            f"سفارش {order_id} از نوبیتکس..."
-                        )
+                        logger.info(f"⏳ در حال استعلام دائم وضعیت سفارش {order_id} از نوبیتکس...")
 
                         max_attempts = 60
 
                         attempts = 0
 
-                        while (
-                                real_quantity <= 0
-                                and attempts < max_attempts
-                        ):
+                        while (real_quantity <= 0 and attempts < max_attempts):
 
                             attempts += 1
 
-                            real_quantity = (
-                                get_nobitex_order_matched_amount(
-                                    order_id
-                                )
-                            )
+                            real_quantity = (get_nobitex_order_matched_amount(order_id))
 
                             if real_quantity > 0:
-                                logger.info(
-                                    f"✅ سفارش پس از "
-                                    f"{attempts} بار تلاش "
-                                    f"کاملاً پر شد."
-                                )
+                                logger.info(f"✅ سفارش پس از {attempts} بار تلاش کاملاً پر شد.")
 
                                 break
 
@@ -1868,20 +1654,13 @@ def monitor_market():
                                 final_stop
                             )
 
-                        now_str = (
-                            jdatetime.datetime.now()
-                            .strftime(
-                                "%Y-%m-%d %H:%M:%S"
-                            )
-                        )
+                        now_str = (jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
                         last_signals[symbol] = {
 
                             "signal": "BUY",
 
-                            "entry_price": int(
-                                price_in_toman * 1.002
-                            ),
+                            "entry_price": int(price_in_toman * 1.002),
 
                             "target_price":
                                 final_target,
@@ -1918,11 +1697,7 @@ def monitor_market():
 
                         open_positions_count += 1
 
-                        trade_mode = (
-                            "تست فرضی (Paper)"
-                            if PAPER_TRADING
-                            else "معامله واقعی"
-                        )
+                        trade_mode = ("تست فرضی (Paper)" if PAPER_TRADING else "معامله واقعی")
 
                         rows_data = [
 
@@ -2012,7 +1787,7 @@ def monitor_market():
                             f"{order_id} در نوبیتکس پر نشد! "
                             f"پوزیشن ذخیره نشد."
                         )
-
+                print("------------------------------------------------------------------")
                 # ====================================================
                 # فاصله کوتاه بین ارزها
                 # ====================================================
@@ -2065,16 +1840,9 @@ def monitor_market():
 
         try:
 
-            with open(
-                    "market_monitor.log",
-                    "a",
-                    encoding="utf-8"
-            ) as log_file:
+            with open("market_monitor.log", "a", encoding="utf-8") as log_file:
 
-                log_file.write(
-                    "\n--- چرخه بعدی پایش "
-                    "در ۳۰۰ ثانیه آینده ---\n\n"
-                )
+                log_file.write("\n--- چرخه بعدی پایش در ۳۰۰ ثانیه آینده ---\n\n")
 
         except OSError as e:
 
