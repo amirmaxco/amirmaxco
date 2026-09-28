@@ -5,8 +5,14 @@ import statistics
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
-
+import logging
+from logging.handlers import TimedRotatingFileHandler
 import requests
+
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import jdatetime
 
 
 # ============================================================================
@@ -21,7 +27,7 @@ UDF_URL = f"{BASE_URL}/market/udf/history"
 REQUEST_TIMEOUT = 12
 SCAN_INTERVAL_SECONDS = 60
 TOP_GAINERS_PRINT = 20
-MARKETS_TO_SCAN = 80
+MARKETS_TO_SCAN = 100
 CANDLE_RESOLUTION = "5"
 CANDLE_SECONDS = 5 * 60
 CANDLE_COUNTBACK = 120
@@ -31,6 +37,13 @@ CANDLE_SCALE_MAX_RELATIVE_ERROR = 0.08
 MAX_DAY_GAIN_FOR_CONTINUATION = 40.0
 MAX_SPREADLESS_PRICE_ERROR = 0.15
 MAX_VOLUME_RATIO_FOR_ENTRY = 20.0
+
+# Early continuation entry: catches strong moves like HBAR before the score
+# reaches the strict standard-entry threshold.
+EARLY_ENTRY_SCORE_MIN = 55.0
+EARLY_ENTRY_VOLUME_MIN = 0.50
+EARLY_ENTRY_DISTANCE_MAX = 2.50
+EARLY_ENTRY_RSI_MAX = 80.0
 
 SCALE_FACTORS = (
     1.0,
@@ -49,6 +62,69 @@ SESSION.headers.update({
     "User-Agent": "NobitexTopGainerContinuation/1.0",
     "Accept": "application/json",
 })
+
+SENDER_EMAIL = "amirghoorbaninia3002@gmail.com"
+SENDER_PASSWORD = "qcmg jxrc vxic mucu"
+RECEIVER_EMAIL = "amirghoorbaninia3002@gmail.com"
+CC_EMAIL = "www.rasul.mahmoudimajd1038@gmail.com"
+
+
+def send_beautiful_email(subject, title, type_color, rows_data):
+    current_time = jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    html_body = f"""
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Tahoma, Arial, sans-serif; direction: rtl; background-color: #f4f6f9; color: #333; padding: 20px; }}
+            .container {{ max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-top: 6px solid {type_color}; }}
+            .header {{ background-color: #1e293b; color: #ffffff; padding: 20px; text-align: center; }}
+            .header h2 {{ margin: 0; font-size: 20px; }}
+            .content {{ padding: 25px; }}
+            .info-table {{ width: 100%; border-collapse: collapse; margin-top: 15px; }}
+            .info-table td {{ padding: 12px; border-bottom: 1px solid #e2e8f0; font-size: 14px; }}
+            .info-table td.label {{ font-weight: bold; color: #4a5568; width: 40%; }}
+            .info-table td.value {{ color: #1a202c; text-align: left; direction: ltr; }}
+            .footer {{ background-color: #f8fafc; padding: 15px; text-align: center; font-size: 11px; color: #718096; border-top: 1px solid #e2e8f0; }}
+        </style>
+    </head>
+    <body dir="rtl">
+        <div class="container">
+            <div class="header"><h2>{title}</h2></div>
+            <div class="content"><table class="info-table">
+    """
+    for label, val in rows_data:
+        html_body += f"<tr><td class='label'>{label}</td><td class='value'>{val}</td></tr>"
+
+    html_body += f"""
+                <tr><td class="label">زمان سیگنال</td><td class="value">{current_time}</td></tr>
+            </table></div>
+            <div class="footer">این یک پیام خودکار از ربات معاملاتی شماست.</div>
+        </div>
+    </body>
+    </html>
+    """
+
+    msg = MIMEMultipart()
+    msg['From'] = SENDER_EMAIL
+    msg['To'] = RECEIVER_EMAIL
+    msg['Subject'] = subject
+
+    recipients = [RECEIVER_EMAIL]
+    if CC_EMAIL:
+        msg['Cc'] = CC_EMAIL
+        recipients.append(CC_EMAIL)
+
+    msg.attach(MIMEText(html_body, 'html', 'utf-8'))
+
+    try:
+        # ✅ استفاده از پورت 465 و SMTP_SSL برای پایداری ۱۰۰٪ در جیمیل
+        server = smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=15)
+        server.login(SENDER_EMAIL, SENDER_PASSWORD)
+        server.sendmail(SENDER_EMAIL, recipients, msg.as_string())
+        server.quit()
+        logger.info("📧 ایمیل با موفقیت ارسال شد.")
+    except Exception as e:
+        logger.error(f"⚠️ خطا در ارسال ایمیل: {e}")
 
 
 # ============================================================================
@@ -624,8 +700,8 @@ def build_trade_plan(analysis: Dict[str, Any]) -> Dict[str, Any]:
     breakout_ok = breakout >= -1.0
     room_ok = distance_to_high >= 0.3
 
-    # Entry thresholds.
-    if (
+    # Standard entry: high-confidence continuation.
+    standard_entry = (
         score >= 72
         and trend_ok
         and momentum_ok
@@ -633,20 +709,48 @@ def build_trade_plan(analysis: Dict[str, Any]) -> Dict[str, Any]:
         and room_ok
         and not bearish_reversal
         and rsi_value < 88
-    ):
+    )
+
+    # Early continuation entry: specifically designed to catch strong moves
+    # like HBAR even when raw volume is below 1x, provided the rest of the
+    # short-term structure is clearly bullish.
+    early_entry = (
+        score >= EARLY_ENTRY_SCORE_MIN
+        and volume_ratio >= EARLY_ENTRY_VOLUME_MIN
+        and ema_bullish
+        and c5 >= 0.50
+        and c15 >= 0.30
+        and c30 >= 1.00
+        and acceleration >= 0.50
+        and breakout >= 0.00
+        and 0.50 <= distance_to_high <= EARLY_ENTRY_DISTANCE_MAX
+        and rsi_value < EARLY_ENTRY_RSI_MAX
+        and not bearish_reversal
+    )
+
+    if standard_entry or early_entry:
         action = "ENTRY"
+        reason = (
+            "Confirmed continuation"
+            if standard_entry
+            else "Early continuation momentum"
+        )
     elif (
         score >= 55
         and trend_ok
         and not bearish_reversal
     ):
         action = "WATCH"
+        reason = "Waiting for stronger confirmation"
     elif bearish_reversal or (not trend_ok and c5 < 0):
         action = "EXIT"
+        reason = "Momentum reversal / trend weakness"
     elif score >= 40:
         action = "WEAK"
+        reason = "Score below entry threshold"
     else:
         action = "EXIT"
+        reason = "No continuation setup"
 
     if action != "ENTRY":
         return {
@@ -660,7 +764,7 @@ def build_trade_plan(analysis: Dict[str, Any]) -> Dict[str, Any]:
             "reward2_pct": 0.0,
             "rr1": 0.0,
             "rr2": 0.0,
-            "reason": "No confirmed continuation entry",
+            "reason": reason,
         }
 
     # Trade plan is based on live market price, not the potentially stale
@@ -692,7 +796,7 @@ def build_trade_plan(analysis: Dict[str, Any]) -> Dict[str, Any]:
         "reward2_pct": reward2_pct,
         "rr1": rr1,
         "rr2": rr2,
-        "reason": "Confirmed continuation",
+        "reason": reason,
     }
 
 
@@ -725,8 +829,8 @@ def print_top_gainers(markets: Dict[str, Dict[str, Any]]) -> List[str]:
 
 
 def print_candidate(analysis: Dict[str, Any], plan: Dict[str, Any]) -> None:
-    print()
-    print("-" * 100)
+    #print()
+    #print("-" * 100)
 
     symbol = analysis["symbol"]
     action = plan["action"]
@@ -742,7 +846,10 @@ def print_candidate(analysis: Dict[str, Any], plan: Dict[str, Any]) -> None:
         print(f"Distance High: {analysis['distance_to_high']:.2f}%")
 
         print(f"Volume Ratio : {analysis['volume_ratio']:.2f}x")
-        print(f"EMA9/EMA20  : {fmt_number(analysis['ema9'])} / {fmt_number(analysis['ema20'])}")
+        print(
+            f"EMA9/EMA20  : {fmt_number(analysis['ema9'])} / "
+            f"{fmt_number(analysis['ema20'])}"
+        )
         print(f"RSI         : {analysis['rsi']:.1f}")
         print(f"5m          : {fmt_pct(analysis['c5'])}")
         print(f"15m         : {fmt_pct(analysis['c15'])}")
@@ -751,6 +858,7 @@ def print_candidate(analysis: Dict[str, Any], plan: Dict[str, Any]) -> None:
         print(f"Breakout    : {fmt_pct(analysis['breakout'])}")
         print(f"Candle      : {analysis['candle_strength']:.2f}")
         print(f"Pullback    : {analysis['pullback']:.2f}")
+        print(f"Decision    : {plan.get('reason', 'N/A')}")
         print(f"Candle Scale: x{analysis['candle_factor']:g} (error={analysis['candle_error'] * 100:.2f}%)")
 
     if analysis.get("volume_anomaly"):
@@ -765,6 +873,21 @@ def print_candidate(analysis: Dict[str, Any], plan: Dict[str, Any]) -> None:
         print(f"Trailing : {fmt_number(plan['trailing'])}")
         print(f"R/R TP1  : 1:{plan['rr1']:.2f}")
         print(f"R/R TP2  : 1:{plan['rr2']:.2f}")
+
+        rows_data=[]
+        rows_data= f"SL       : {fmt_number(plan['sl'])}"
+        f"TP1      : {fmt_number(plan['tp1'])}"
+        f"TP2      : {fmt_number(plan['tp2'])}"
+        f"Trailing : {fmt_number(plan['trailing'])}"
+        f"R/R TP1  : 1:{plan['rr1']:.2f}"
+        f"R/R TP2  : 1:{plan['rr2']:.2f}"
+
+        send_beautiful_email(
+            subject=(f"🚀 سیگنال خرید {symbol} "),
+            title=(f"خرید {symbol}"),
+            type_color="#10b981",
+            rows_data=rows_data
+        )
 
 
 def print_scanner_header() -> None:
@@ -810,7 +933,6 @@ def scan_once() -> None:
 
     # Sort by score, while retaining all analyzed candidates for summary.
     ranked = sorted(analyses, key=lambda x: x["score"], reverse=True)
-
 
     print()
     print("=" * 100)
@@ -940,6 +1062,27 @@ def regression_tests() -> None:
     plan = build_trade_plan(analysis)
     assert plan["action"] == "WATCH"
     print("✅ volume anomaly guard")
+
+    # TEST 10: HBAR-like early continuation setup
+    hbar_like = {
+        "market_price": 100.0,
+        "signal_price": 100.0,
+        "score": 55.0,
+        "c5": 1.24,
+        "c15": 0.60,
+        "c30": 3.18,
+        "acceleration": 1.42,
+        "rsi": 69.8,
+        "ema_bullish": True,
+        "distance_to_high": 1.29,
+        "breakout": 0.60,
+        "candle_strength": 0.44,
+        "volume_ratio": 0.77,
+        "volume_anomaly": False,
+    }
+    plan = build_trade_plan(hbar_like)
+    assert plan["action"] == "ENTRY"
+    print("✅ HBAR-style early continuation entry")
 
     print("=" * 100)
     print("✅ ALL TESTS PASSED")
