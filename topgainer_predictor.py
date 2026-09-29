@@ -1,19 +1,17 @@
 from __future__ import annotations
 
 import math
+import smtplib
 import statistics
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
-import logging
-from logging.handlers import TimedRotatingFileHandler
-import requests
-
-import smtplib
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-import jdatetime
+from email.mime.text import MIMEText
+from typing import Any, Dict, List, Optional, Tuple
 
+import jdatetime
+import logger
+import requests
 
 # ============================================================================
 # NOBITEX TOP-GAINER CONTINUATION PREDICTOR
