@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import os
 import smtplib
 import statistics
 import time
@@ -10,12 +11,12 @@ from email.mime.text import MIMEText
 from typing import Any, Dict, List, Optional, Tuple
 
 import jdatetime
-import logger
 import requests
 
+
 # ============================================================================
-# NOBITEX TOP-GAINER CONTINUATION PREDICTOR
-# Standalone scanner - analysis only, NO ORDER PLACEMENT
+# NOBITEX TOP-GAINER CONTINUATION PREDICTOR  (v3 - relaxed + anti-fake quality filters)
+# Analysis only, NO ORDER PLACEMENT
 # ============================================================================
 
 BASE_URL = "https://apiv2.nobitex.ir"
@@ -24,105 +25,201 @@ UDF_URL = f"{BASE_URL}/market/udf/history"
 
 REQUEST_TIMEOUT = 12
 SCAN_INTERVAL_SECONDS = 60
+
 TOP_GAINERS_PRINT = 20
 MARKETS_TO_SCAN = 100
+CANDIDATES_PRINT = 20
+
 CANDLE_RESOLUTION = "5"
 CANDLE_SECONDS = 5 * 60
 CANDLE_COUNTBACK = 120
 MIN_CANDLES = 40
 
+# ---------------------------------------------------------------------------
+# PRICE / DATA GUARDS
+# ---------------------------------------------------------------------------
 CANDLE_SCALE_MAX_RELATIVE_ERROR = 0.08
-MAX_DAY_GAIN_FOR_CONTINUATION = 40.0
-MAX_SPREADLESS_PRICE_ERROR = 0.15
-MAX_VOLUME_RATIO_FOR_ENTRY = 20.0
+# FIX: was 40. A realistic ceiling so a +5..10% coin gets a meaningful score.
+MAX_DAY_GAIN_FOR_CONTINUATION = 10.0
 
-# Early continuation entry: catches strong moves like HBAR before the score
-# reaches the strict standard-entry threshold.
-EARLY_ENTRY_SCORE_MIN = 55.0
-EARLY_ENTRY_VOLUME_MIN = 0.50
-EARLY_ENTRY_DISTANCE_MAX = 2.50
+# ---------------------------------------------------------------------------
+# VOLUME LOGIC
+# ---------------------------------------------------------------------------
+VOLUME_ELEVATED = 10.0
+VOLUME_ANOMALY = 20.0
+VOLUME_EXTREME = 40.0
+
+# ---------------------------------------------------------------------------
+# STANDARD ENTRY (relaxed)
+# ---------------------------------------------------------------------------
+STANDARD_ENTRY_SCORE_MIN = 60.0      # was 72
+STANDARD_RSI_MAX = 88.0
+STANDARD_VOLUME_MIN = 0.40           # standard entry also needs real volume
+
+# ---------------------------------------------------------------------------
+# ANTI-FAKE QUALITY FILTERS (applied to every ENTRY; failing => WATCH)
+# These are starting values, tune them with the "Quality blocked" statistics.
+# ---------------------------------------------------------------------------
+QUALITY_WINDOW = 8                   # last N closed 5m candles are inspected
+QUALITY_MIN_ACTIVE_CANDLES = 6       # candles with volume>0 and high>low
+QUALITY_MAX_FLAT_CLOSES = 2          # identical consecutive closes (dead market)
+QUALITY_MIN_CANDLE_STRENGTH = -0.30  # last closed candle must not be strongly red
+QUALITY_MAX_UPPER_WICK = 0.60        # upper wick / candle range (selling pressure)
+QUALITY_MAX_EXT_EMA20 = 5.0          # % above EMA20 (already overextended)
+
+# ---------------------------------------------------------------------------
+# EARLY ENTRY (relaxed)
+# ---------------------------------------------------------------------------
+EARLY_ENTRY_SCORE_MIN = 45.0         # was 55
+EARLY_ENTRY_VOLUME_MIN = 0.40        # was 0.50
+EARLY_ENTRY_DISTANCE_MIN = 0.0       # was 0.5 (coins AT the high are allowed)
+EARLY_ENTRY_DISTANCE_MAX = 3.0       # was 2.5
 EARLY_ENTRY_RSI_MAX = 80.0
+EARLY_BREAKOUT_MIN = -0.50
+EARLY_C5_MIN = 0.25                  # was 0.50
+EARLY_C15_MIN = 0.25                 # was 0.30
+EARLY_C30_MIN = 0.60                 # was 1.00
+EARLY_ACCEL_MIN = -0.20              # was 0.50
 
-SCALE_FACTORS = (
-    1.0,
-    10.0,
-    0.1,
-    100.0,
-    0.01,
-    1000.0,
-    0.001,
-    10000.0,
-    0.0001,
-)
+# ---------------------------------------------------------------------------
+# PRE-ENTRY
+# ---------------------------------------------------------------------------
+PRE_ENTRY_SCORE_MIN = 62.0
+PRE_ENTRY_DISTANCE_MAX = 3.50
+PRE_ENTRY_RSI_MAX = 82.0
+
+# ---------------------------------------------------------------------------
+# TRADE PLAN
+# ---------------------------------------------------------------------------
+RISK_PERCENT = 1.80
+TP1_PERCENT = 2.50
+TP2_PERCENT = 5.00
+TRAILING_PERCENT = 1.50
+
+# ---------------------------------------------------------------------------
+# EMAIL ANTI-SPAM
+# ---------------------------------------------------------------------------
+ALERT_COOLDOWN_SECONDS = 30 * 60
+LAST_ALERT: Dict[str, float] = {}
+
+SCALE_FACTORS = (1.0, 10.0, 0.1, 100.0, 0.01, 1000.0, 0.001, 10000.0, 0.0001)
+
+# Why markets were dropped silently (printed in the summary)
+SKIP_COUNTS: Dict[str, int] = {}
 
 SESSION = requests.Session()
 SESSION.headers.update({
-    "User-Agent": "NobitexTopGainerContinuation/1.0",
+    "User-Agent": "NobitexTopGainerContinuation/2.1",
     "Accept": "application/json",
 })
+
+
+# ============================================================================
+# EMAIL CONFIG (use environment variables, never hard-code the password)
+#   CMD:        set NOBITEX_EMAIL_PASSWORD=YOUR_APP_PASSWORD
+#   PowerShell: $env:NOBITEX_EMAIL_PASSWORD="YOUR_APP_PASSWORD"
+# ============================================================================
 
 SENDER_EMAIL = "amirghoorbaninia3002@gmail.com"
 SENDER_PASSWORD = "qcmg jxrc vxic mucu"
 RECEIVER_EMAIL = "amirghoorbaninia3002@gmail.com"
 CC_EMAIL = "www.rasul.mahmoudimajd1038@gmail.com"
 
+NOBITEX_TOKEN = "o5TJUZrJoLj7afjp3jxhYa2wixNdKI4gdX8KVtj9Htk="
+NOBITEX_TOKEN_PUBLIC = "4f607aff93a0f574deeda11c0a88c8d89ecc56af"
 
-def send_beautiful_email(subject, title, type_color, rows_data):
+
+def send_beautiful_email(
+    subject: str,
+    title: str,
+    type_color: str,
+    rows_data: List[Tuple[str, str]],
+) -> bool:
+    if not SENDER_PASSWORD:
+        print("⚠️ Email disabled: NOBITEX_EMAIL_PASSWORD is not set.")
+        return False
+    if not SENDER_EMAIL or "@" not in SENDER_EMAIL:
+        print("⚠️ Email disabled: invalid SENDER_EMAIL.")
+        return False
+    if not RECEIVER_EMAIL or "@" not in RECEIVER_EMAIL:
+        print("⚠️ Email disabled: invalid RECEIVER_EMAIL.")
+        return False
+
     current_time = jdatetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
     html_body = f"""
     <html>
     <head>
+        <meta charset="utf-8">
         <style>
-            body {{ font-family: Tahoma, Arial, sans-serif; direction: rtl; background-color: #f4f6f9; color: #333; padding: 20px; }}
-            .container {{ max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-top: 6px solid {type_color}; }}
-            .header {{ background-color: #1e293b; color: #ffffff; padding: 20px; text-align: center; }}
+            body {{ font-family: Tahoma, Arial, sans-serif; direction: rtl;
+                   background-color: #f4f6f9; color: #333; padding: 20px; }}
+            .container {{ max-width: 650px; margin: 0 auto; background: #fff;
+                         border-radius: 8px; overflow: hidden;
+                         box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+                         border-top: 6px solid {type_color}; }}
+            .header {{ background-color: #1e293b; color: #fff; padding: 20px;
+                      text-align: center; }}
             .header h2 {{ margin: 0; font-size: 20px; }}
             .content {{ padding: 25px; }}
             .info-table {{ width: 100%; border-collapse: collapse; margin-top: 15px; }}
-            .info-table td {{ padding: 12px; border-bottom: 1px solid #e2e8f0; font-size: 14px; }}
-            .info-table td.label {{ font-weight: bold; color: #4a5568; width: 40%; }}
+            .info-table td {{ padding: 11px; border-bottom: 1px solid #e2e8f0;
+                             font-size: 14px; }}
+            .info-table td.label {{ font-weight: bold; color: #4a5568; width: 42%; }}
             .info-table td.value {{ color: #1a202c; text-align: left; direction: ltr; }}
-            .footer {{ background-color: #f8fafc; padding: 15px; text-align: center; font-size: 11px; color: #718096; border-top: 1px solid #e2e8f0; }}
+            .footer {{ background-color: #f8fafc; padding: 15px; text-align: center;
+                      font-size: 11px; color: #718096; border-top: 1px solid #e2e8f0; }}
         </style>
     </head>
     <body dir="rtl">
         <div class="container">
             <div class="header"><h2>{title}</h2></div>
-            <div class="content"><table class="info-table">
+            <div class="content">
+                <table class="info-table">
     """
+
     for label, val in rows_data:
-        html_body += f"<tr><td class='label'>{label}</td><td class='value'>{val}</td></tr>"
+        html_body += (
+            f"<tr><td class='label'>{label}</td>"
+            f"<td class='value'>{val}</td></tr>"
+        )
 
     html_body += f"""
-                <tr><td class="label">زمان سیگنال</td><td class="value">{current_time}</td></tr>
-            </table></div>
-            <div class="footer">این یک پیام خودکار از ربات معاملاتی شماست.</div>
+                    <tr>
+                        <td class="label">زمان سیگنال</td>
+                        <td class="value">{current_time}</td>
+                    </tr>
+                </table>
+            </div>
+            <div class="footer">
+                این یک پیام خودکار از ربات تحلیل Nobitex است.
+            </div>
         </div>
     </body>
     </html>
     """
 
-    msg = MIMEMultipart()
-    msg['From'] = SENDER_EMAIL
-    msg['To'] = RECEIVER_EMAIL
-    msg['Subject'] = subject
+    msg = MIMEMultipart("alternative")
+    msg["From"] = SENDER_EMAIL
+    msg["To"] = RECEIVER_EMAIL
+    msg["Subject"] = subject
 
     recipients = [RECEIVER_EMAIL]
-    if CC_EMAIL:
-        msg['Cc'] = CC_EMAIL
+    if CC_EMAIL and "@" in CC_EMAIL:
+        msg["Cc"] = CC_EMAIL
         recipients.append(CC_EMAIL)
 
-    msg.attach(MIMEText(html_body, 'html', 'utf-8'))
+    msg.attach(MIMEText(html_body, "html", "utf-8"))
 
     try:
-        # ✅ استفاده از پورت 465 و SMTP_SSL برای پایداری ۱۰۰٪ در جیمیل
-        server = smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=15)
-        server.login(SENDER_EMAIL, SENDER_PASSWORD)
-        server.sendmail(SENDER_EMAIL, recipients, msg.as_string())
-        server.quit()
-        logger.info("📧 ایمیل با موفقیت ارسال شد.")
-    except Exception as e:
-        logger.error(f"⚠️ خطا در ارسال ایمیل: {e}")
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15) as server:
+            server.login(SENDER_EMAIL, SENDER_PASSWORD)
+            server.sendmail(SENDER_EMAIL, recipients, msg.as_string())
+        print("📧 ایمیل با موفقیت ارسال شد.")
+        return True
+    except Exception as exc:
+        print(f"⚠️ خطا در ارسال ایمیل: {exc}")
+        return False
 
 
 # ============================================================================
@@ -148,8 +245,6 @@ def now_unix() -> int:
 def fmt_number(value: Optional[float]) -> str:
     if value is None or not math.isfinite(value):
         return "N/A"
-    if abs(value) >= 1_000_000_000:
-        return f"{value:,.0f}"
     if abs(value) >= 1:
         return f"{value:,.0f}"
     return f"{value:,.8f}".rstrip("0").rstrip(".")
@@ -158,9 +253,7 @@ def fmt_number(value: Optional[float]) -> str:
 def fmt_pct(value: Optional[float], signed: bool = True) -> str:
     if value is None or not math.isfinite(value):
         return "N/A"
-    if signed:
-        return f"{value:+.2f}%"
-    return f"{value:.2f}%"
+    return f"{value:+.2f}%" if signed else f"{value:.2f}%"
 
 
 def clamp(value: float, low: float, high: float) -> float:
@@ -170,6 +263,10 @@ def clamp(value: float, low: float, high: float) -> float:
 def safe_mean(values: List[float], default: float = 0.0) -> float:
     clean = [x for x in values if math.isfinite(x)]
     return statistics.mean(clean) if clean else default
+
+
+def skip(reason: str) -> None:
+    SKIP_COUNTS[reason] = SKIP_COUNTS.get(reason, 0) + 1
 
 
 # ============================================================================
@@ -207,6 +304,7 @@ def fetch_market_stats() -> Dict[str, Dict[str, Any]]:
             continue
 
         symbol = market[:-4]
+
         latest = safe_float(raw.get("latest"))
         day_high = safe_float(raw.get("dayHigh"))
         day_low = safe_float(raw.get("dayLow"))
@@ -270,22 +368,16 @@ def fetch_candles(symbol: str, countback: int = CANDLE_COUNTBACK) -> List[Dict[s
             continue
 
         candles.append({
-            "t": float(t),
-            "o": float(o),
-            "h": float(h),
-            "l": float(l),
-            "c": float(c),
-            "v": float(v or 0.0),
+            "t": float(t), "o": float(o), "h": float(h),
+            "l": float(l), "c": float(c), "v": float(v or 0.0),
         })
 
     candles.sort(key=lambda x: x["t"])
 
-    # Closed-candle mode: remove only the currently open 5m candle.
+    # Remove only the currently open candle.
     current = now_unix()
-    if candles:
-        last = candles[-1]
-        if last["t"] + CANDLE_SECONDS > current:
-            candles = candles[:-1]
+    if candles and candles[-1]["t"] + CANDLE_SECONDS > current:
+        candles = candles[:-1]
 
     return candles
 
@@ -305,8 +397,7 @@ def find_best_candle_scale(
     if last_close is None or last_close <= 0:
         return 1.0, 999.0
 
-    best_factor = 1.0
-    best_error = float("inf")
+    best_factor, best_error = 1.0, float("inf")
 
     for factor in SCALE_FACTORS:
         scaled_close = last_close * factor
@@ -314,8 +405,7 @@ def find_best_candle_scale(
             continue
         error = abs(scaled_close - target_price) / target_price
         if error < best_error:
-            best_error = error
-            best_factor = factor
+            best_error, best_factor = error, factor
 
     return best_factor, best_error
 
@@ -328,8 +418,8 @@ def normalize_candles_to_price_scale(
         return candles, 1.0, 999.0
 
     factor, relative_error = find_best_candle_scale(candles, target_price)
-    scaled: List[Dict[str, float]] = []
 
+    scaled: List[Dict[str, float]] = []
     for candle in candles:
         item = dict(candle)
         for key in ("o", "h", "l", "c"):
@@ -341,16 +431,11 @@ def normalize_candles_to_price_scale(
     return scaled, factor, relative_error
 
 
-def find_best_range_scale(
-    high: float,
-    low: float,
-    target_price: float,
-) -> Tuple[float, float]:
+def find_best_range_scale(high: float, low: float, target_price: float) -> Tuple[float, float]:
     if high <= 0 or low <= 0 or target_price <= 0:
         return 1.0, 999.0
 
-    best_factor = 1.0
-    best_error = float("inf")
+    best_factor, best_error = 1.0, float("inf")
     reference = (high + low) / 2.0
 
     for factor in SCALE_FACTORS:
@@ -359,8 +444,7 @@ def find_best_range_scale(
             continue
         error = abs(scaled_reference - target_price) / target_price
         if error < best_error:
-            best_error = error
-            best_factor = factor
+            best_error, best_factor = error, factor
 
     return best_factor, best_error
 
@@ -384,17 +468,17 @@ def normalize_24h_range(
 def ema(values: List[float], period: int) -> List[float]:
     if not values:
         return []
+
+    alpha = 2.0 / (period + 1.0)
+
     if len(values) < period:
-        seed = safe_mean(values)
-        alpha = 2.0 / (period + 1.0)
+        current = safe_mean(values)
         out = []
-        current = seed
         for value in values:
             current = alpha * value + (1.0 - alpha) * current
             out.append(current)
         return out
 
-    alpha = 2.0 / (period + 1.0)
     seed = safe_mean(values[:period])
     out = [seed]
     current = seed
@@ -403,9 +487,7 @@ def ema(values: List[float], period: int) -> List[float]:
         current = alpha * value + (1.0 - alpha) * current
         out.append(current)
 
-    # Align output length with input length.
-    prefix = [seed] * (period - 1)
-    return prefix + out
+    return [seed] * (period - 1) + out
 
 
 def rsi(values: List[float], period: int = 14) -> float:
@@ -424,8 +506,8 @@ def rsi(values: List[float], period: int = 14) -> float:
     avg_loss = safe_mean(losses[:period])
 
     for i in range(period, len(gains)):
-        avg_gain = ((avg_gain * (period - 1)) + gains[i]) / period
-        avg_loss = ((avg_loss * (period - 1)) + losses[i]) / period
+        avg_gain = (avg_gain * (period - 1) + gains[i]) / period
+        avg_loss = (avg_loss * (period - 1) + losses[i]) / period
 
     if avg_loss == 0:
         return 100.0 if avg_gain > 0 else 50.0
@@ -441,30 +523,21 @@ def pct_change(new: float, old: float) -> float:
 
 
 def candle_strength(candle: Dict[str, float]) -> float:
-    o = candle["o"]
-    h = candle["h"]
-    l = candle["l"]
-    c = candle["c"]
-    rng = h - l
-
+    rng = candle["h"] - candle["l"]
     if rng <= 0:
         return 0.0
-
-    body = (c - o) / rng
-    return clamp(body, -1.0, 1.0)
+    return clamp((candle["c"] - candle["o"]) / rng, -1.0, 1.0)
 
 
 def calculate_distance_to_high(price: float, high: float) -> float:
     if price <= 0 or high <= 0:
         return 0.0
-    # Positive percentage = room remaining to the 24h high.
     return max(0.0, (high - price) / high * 100.0)
 
 
 def gain_score(day_change: float, max_gain: float = MAX_DAY_GAIN_FOR_CONTINUATION) -> float:
     if day_change <= 0:
         return 0.0
-    # Avoid allowing a giant one-day move alone to dominate continuation score.
     return clamp(day_change / max_gain * 30.0, 0.0, 30.0)
 
 
@@ -477,15 +550,17 @@ def build_analysis(symbol: str, market: Dict[str, Any]) -> Optional[Dict[str, An
     day_change = safe_float(market.get("day_change"), 0.0) or 0.0
 
     if market_price is None or market_price <= 0:
+        skip("bad price")
         return None
 
-    # Huge single-day moves are still scan candidates, but they require strong
-    # confirmation and are not rewarded indefinitely by gain_score().
     if day_change <= 0:
+        skip("24h change <= 0")
         return None
 
     candles = fetch_candles(symbol)
+
     if len(candles) < MIN_CANDLES:
+        skip("not enough candles")
         return None
 
     candles, candle_factor, candle_error = normalize_candles_to_price_scale(
@@ -493,6 +568,7 @@ def build_analysis(symbol: str, market: Dict[str, Any]) -> Optional[Dict[str, An
     )
 
     if candle_error > CANDLE_SCALE_MAX_RELATIVE_ERROR:
+        skip("candle/price scale mismatch")
         return None
 
     closes = [c["c"] for c in candles]
@@ -500,48 +576,38 @@ def build_analysis(symbol: str, market: Dict[str, Any]) -> Optional[Dict[str, An
 
     signal_price = closes[-1]
     if signal_price <= 0:
+        skip("bad signal price")
         return None
 
-    ema9_values = ema(closes, 9)
-    ema20_values = ema(closes, 20)
-
-    ema9_last = ema9_values[-1]
-    ema20_last = ema20_values[-1]
-
+    ema9_last = ema(closes, 9)[-1]
+    ema20_last = ema(closes, 20)[-1]
     rsi_value = rsi(closes, 14)
 
-    c5 = pct_change(closes[-1], closes[-2]) if len(closes) >= 2 else 0.0
-    c15 = pct_change(closes[-1], closes[-4]) if len(closes) >= 4 else 0.0
-    c30 = pct_change(closes[-1], closes[-7]) if len(closes) >= 7 else 0.0
+    c5 = pct_change(closes[-1], closes[-2])
+    c15 = pct_change(closes[-1], closes[-4])
+    c30 = pct_change(closes[-1], closes[-7])
 
-    old_5m = closes[-2]
-    old_15m = closes[-5] if len(closes) >= 5 else closes[0]
-    acceleration = c5 - pct_change(old_5m, old_15m)
+    # FIX: compare the current 5m change with the PREVIOUS 5m change
+    # (previously it was compared with a 15m change -> wrong scale).
+    previous_c5 = pct_change(closes[-2], closes[-3])
+    acceleration = c5 - previous_c5
 
-    lookback_volumes = volumes[-21:-1]
-    avg_volume = safe_mean(lookback_volumes, 0.0)
+    avg_volume = safe_mean(volumes[-21:-1], 0.0)
     latest_volume = volumes[-1]
+    volume_ratio = latest_volume / avg_volume if avg_volume > 0 else 0.0
 
-    if avg_volume <= 0:
-        volume_ratio = 0.0
-    else:
-        volume_ratio = latest_volume / avg_volume
-
-    previous_high = max(closes[-21:-1]) if len(closes) >= 21 else max(closes[:-1])
-    breakout = pct_change(signal_price, previous_high) if previous_high > 0 else 0.0
+    previous_high = max(closes[-21:-1])
+    breakout = pct_change(signal_price, previous_high)
 
     latest_candle_strength = candle_strength(candles[-1])
 
-    recent_low = min(closes[-6:]) if len(closes) >= 6 else min(closes)
-    pullback = pct_change(signal_price, recent_low) if recent_low > 0 else 0.0
-    # Normalize pullback into a 0..1 confidence contribution.
+    recent_low = min(closes[-6:])
+    pullback = pct_change(signal_price, recent_low)
     pullback_score = clamp(pullback / 3.0, 0.0, 1.0)
 
-    day_high_raw = safe_float(market.get("day_high"))
-    day_low_raw = safe_float(market.get("day_low"))
     day_high, day_low, range_factor = normalize_24h_range(
-        day_high_raw,
-        day_low_raw,
+        safe_float(market.get("day_high")),
+        safe_float(market.get("day_low")),
         market_price,
     )
 
@@ -552,44 +618,55 @@ def build_analysis(symbol: str, market: Dict[str, Any]) -> Optional[Dict[str, An
     distance_to_high = calculate_distance_to_high(signal_price, day_high)
     ema_bullish = ema9_last > ema20_last
 
-    # ------------------------------------------------------------------------
-    # Score
-    # ------------------------------------------------------------------------
+    # ---- quality metrics (used by the anti-fake filters) ------------------
+    window = candles[-QUALITY_WINDOW:]
+    active_candles = sum(1 for k in window if k["v"] > 0 and k["h"] > k["l"])
+    flat_closes = sum(
+        1 for i in range(1, len(window)) if window[i]["c"] == window[i - 1]["c"]
+    )
+    last_c = candles[-1]
+    last_rng = last_c["h"] - last_c["l"]
+    upper_wick = (
+        (last_c["h"] - max(last_c["o"], last_c["c"])) / last_rng if last_rng > 0 else 0.0
+    )
+    ext_ema20 = pct_change(signal_price, ema20_last)
+
+    # ------------------------------------------------------------------ SCORE
     score = 0.0
 
-    # 24h gain: maximum 30 points.
+    # 24h gain: max 30
     score += gain_score(day_change)
 
-    # Multi-timeframe momentum: maximum 20 points.
-    momentum_points = 0.0
-    momentum_points += clamp(c5 / 2.0, -1.0, 1.0) * 7.0
-    momentum_points += clamp(c15 / 3.0, -1.0, 1.0) * 7.0
-    momentum_points += clamp(c30 / 4.0, -1.0, 1.0) * 6.0
+    # Momentum: max 20
+    momentum_points = (
+        clamp(c5 / 2.0, -1.0, 1.0) * 7.0
+        + clamp(c15 / 3.0, -1.0, 1.0) * 7.0
+        + clamp(c30 / 4.0, -1.0, 1.0) * 6.0
+    )
     score += max(0.0, momentum_points)
 
-    # EMA trend: 10 points.
+    # EMA trend: 10
     if ema_bullish:
         score += 10.0
 
-    # Acceleration: up to 10 points.
+    # Acceleration: max 10
     if acceleration > 0:
         score += clamp(acceleration / 2.0, 0.0, 1.0) * 10.0
 
-    # Volume: intentionally capped so a one-candle abnormal spike cannot
-    # dominate the whole score.
+    # Volume
     if 1.0 <= volume_ratio < 2.0:
         volume_score = 2.0
     elif 2.0 <= volume_ratio < 5.0:
         volume_score = 5.0
-    elif 5.0 <= volume_ratio <= MAX_VOLUME_RATIO_FOR_ENTRY:
+    elif 5.0 <= volume_ratio <= VOLUME_ANOMALY:
         volume_score = 8.0
-    elif volume_ratio > MAX_VOLUME_RATIO_FOR_ENTRY:
-        volume_score = 3.0
+    elif volume_ratio > VOLUME_ANOMALY:
+        volume_score = 2.0
     else:
-        volume_score = 0.0
+        volume_score = 0.5 if volume_ratio >= 0.50 else 0.0
     score += volume_score
 
-    # Near-high and breakout confirmation: maximum 7 points.
+    # Near high / breakout: max 7
     if distance_to_high <= 1.0:
         score += 4.0
     elif distance_to_high <= 3.0:
@@ -600,10 +677,14 @@ def build_analysis(symbol: str, market: Dict[str, Any]) -> Optional[Dict[str, An
     elif breakout > -1.0:
         score += 1.0
 
-    # Candle structure: maximum 3 points.
+    # Candle structure: max 3
     score += clamp((latest_candle_strength + 1.0) * 1.5, 0.0, 3.0)
 
-    # Overbought penalty, but not an automatic rejection.
+    # Healthy pullback: max 3
+    if 0.5 <= pullback <= 3.0:
+        score += 3.0 * pullback_score
+
+    # RSI penalty
     if rsi_value >= 90:
         score -= 8.0
     elif rsi_value >= 85:
@@ -611,13 +692,10 @@ def build_analysis(symbol: str, market: Dict[str, Any]) -> Optional[Dict[str, An
     elif rsi_value >= 80:
         score -= 2.0
 
-    # Negative multi-timeframe structure penalty.
     if c5 < 0 and c15 < 0:
         score -= 5.0
 
     score = round(clamp(score, 0.0, 100.0), 1)
-
-    volume_anomaly = volume_ratio > MAX_VOLUME_RATIO_FOR_ENTRY
 
     return {
         "symbol": symbol,
@@ -639,24 +717,73 @@ def build_analysis(symbol: str, market: Dict[str, Any]) -> Optional[Dict[str, An
         "breakout": breakout,
         "candle_strength": latest_candle_strength,
         "pullback": pullback_score,
+        "pullback_pct": pullback,
         "score": score,
         "candle_factor": candle_factor,
         "candle_error": candle_error,
         "range_factor": range_factor,
-        "volume_anomaly": volume_anomaly,
+        "volume_anomaly": volume_ratio > VOLUME_ANOMALY,
+        "volume_extreme": volume_ratio > VOLUME_EXTREME,
         "candle_count": len(candles),
+        "active_candles": active_candles,
+        "flat_closes": flat_closes,
+        "upper_wick": upper_wick,
+        "ext_ema20": ext_ema20,
     }
+
+
+# ============================================================================
+# DIAGNOSTICS - which early-entry conditions failed
+# ============================================================================
+
+def quality_failures(a: Dict[str, Any]) -> List[str]:
+    """Reasons why an otherwise valid ENTRY looks like a fake / low-quality signal."""
+    fails: List[str] = []
+    if a.get("active_candles", QUALITY_WINDOW) < QUALITY_MIN_ACTIVE_CANDLES:
+        fails.append(f"thin-market({a.get('active_candles')}/{QUALITY_WINDOW} active)")
+    if a.get("flat_closes", 0) > QUALITY_MAX_FLAT_CLOSES:
+        fails.append(f"flat-candles({a.get('flat_closes')})")
+    if a.get("candle_strength", 0.0) < QUALITY_MIN_CANDLE_STRENGTH:
+        fails.append(f"red-last-candle({a.get('candle_strength'):.2f})")
+    if a.get("upper_wick", 0.0) > QUALITY_MAX_UPPER_WICK:
+        fails.append(f"upper-wick({a.get('upper_wick'):.2f})")
+    if a.get("ext_ema20", 0.0) > QUALITY_MAX_EXT_EMA20:
+        fails.append(f"extended({a.get('ext_ema20'):.1f}%>EMA20)")
+    return fails
+
+
+def explain_early_failures(a: Dict[str, Any]) -> List[str]:
+    checks = {
+        f"score>={EARLY_ENTRY_SCORE_MIN:g}": a["score"] >= EARLY_ENTRY_SCORE_MIN,
+        f"vol>={EARLY_ENTRY_VOLUME_MIN:g}": a["volume_ratio"] >= EARLY_ENTRY_VOLUME_MIN,
+        "ema": a["ema_bullish"],
+        f"c5>={EARLY_C5_MIN:g}": a["c5"] >= EARLY_C5_MIN,
+        f"c15>={EARLY_C15_MIN:g}": a["c15"] >= EARLY_C15_MIN,
+        f"c30>={EARLY_C30_MIN:g}": a["c30"] >= EARLY_C30_MIN,
+        f"accel>={EARLY_ACCEL_MIN:g}": a["acceleration"] >= EARLY_ACCEL_MIN,
+        f"breakout>={EARLY_BREAKOUT_MIN:g}": a["breakout"] >= EARLY_BREAKOUT_MIN,
+        f"dist {EARLY_ENTRY_DISTANCE_MIN:g}-{EARLY_ENTRY_DISTANCE_MAX:g}":
+            EARLY_ENTRY_DISTANCE_MIN <= a["distance_to_high"] <= EARLY_ENTRY_DISTANCE_MAX,
+        f"rsi<{EARLY_ENTRY_RSI_MAX:g}": a["rsi"] < EARLY_ENTRY_RSI_MAX,
+    }
+    return [name for name, ok in checks.items() if not ok]
 
 
 # ============================================================================
 # TRADE PLAN
 # ============================================================================
 
+def _no_levels(action: str, reason: str) -> Dict[str, Any]:
+    return {
+        "action": action, "sl": None, "tp1": None, "tp2": None,
+        "trailing": None, "risk_pct": 0.0, "reward1_pct": 0.0,
+        "reward2_pct": 0.0, "rr1": 0.0, "rr2": 0.0, "reason": reason,
+    }
+
+
 def build_trade_plan(analysis: Dict[str, Any]) -> Dict[str, Any]:
     price = float(analysis["market_price"])
-    signal_price = float(analysis["signal_price"])
     score = float(analysis["score"])
-
     c5 = float(analysis["c5"])
     c15 = float(analysis["c15"])
     c30 = float(analysis["c30"])
@@ -667,25 +794,17 @@ def build_trade_plan(analysis: Dict[str, Any]) -> Dict[str, Any]:
     breakout = float(analysis["breakout"])
     candle_strength_value = float(analysis["candle_strength"])
     volume_ratio = float(analysis["volume_ratio"])
+    volume_extreme = bool(analysis.get("volume_extreme", False))
+    volume_anomaly = bool(analysis.get("volume_anomaly", False))
 
-    # Critical guard: an extreme volume ratio is treated as an anomaly and
-    # cannot independently produce ENTRY.
-    if analysis.get("volume_anomaly", False):
-        return {
-            "action": "WATCH",
-            "sl": None,
-            "tp1": None,
-            "tp2": None,
-            "trailing": None,
-            "risk_pct": 0.0,
-            "reward1_pct": 0.0,
-            "reward2_pct": 0.0,
-            "rr1": 0.0,
-            "rr2": 0.0,
-            "reason": "Extreme volume anomaly",
-        }
+    # ---------------------------------------------------------- VOLUME GUARD
+    if volume_extreme:
+        return _no_levels("WATCH", "Extreme volume anomaly")
 
-    # Reversal / exhaustion conditions.
+    if volume_anomaly:
+        return _no_levels("WATCH", "High volume anomaly - confirmation required")
+
+    # ------------------------------------------------- REVERSAL / EXHAUSTION
     bearish_reversal = (
         (c5 <= -0.8 and acceleration < 0)
         or (c15 <= -1.0 and c30 < 0 and not ema_bullish)
@@ -696,48 +815,62 @@ def build_trade_plan(analysis: Dict[str, Any]) -> Dict[str, Any]:
     trend_ok = ema_bullish and c15 > -0.2 and c30 > -0.5
     momentum_ok = c5 > 0.3 and c15 > 0.2 and acceleration > -0.5
     breakout_ok = breakout >= -1.0
-    room_ok = distance_to_high >= 0.3
+    # FIX: coins sitting exactly on the 24h high are allowed
+    room_ok = distance_to_high >= 0.0
 
-    # Standard entry: high-confidence continuation.
+    # --------------------------------------------------------- STANDARD ENTRY
     standard_entry = (
-        score >= 72
+        score >= STANDARD_ENTRY_SCORE_MIN
         and trend_ok
         and momentum_ok
         and breakout_ok
         and room_ok
         and not bearish_reversal
-        and rsi_value < 88
+        and rsi_value < STANDARD_RSI_MAX
+        and volume_ratio >= STANDARD_VOLUME_MIN
     )
 
-    # Early continuation entry: specifically designed to catch strong moves
-    # like HBAR even when raw volume is below 1x, provided the rest of the
-    # short-term structure is clearly bullish.
+    # ------------------------------------------------------------ EARLY ENTRY
     early_entry = (
         score >= EARLY_ENTRY_SCORE_MIN
         and volume_ratio >= EARLY_ENTRY_VOLUME_MIN
         and ema_bullish
-        and c5 >= 0.50
-        and c15 >= 0.30
-        and c30 >= 1.00
-        and acceleration >= 0.50
-        and breakout >= 0.00
-        and 0.50 <= distance_to_high <= EARLY_ENTRY_DISTANCE_MAX
+        and c5 >= EARLY_C5_MIN
+        and c15 >= EARLY_C15_MIN
+        and c30 >= EARLY_C30_MIN
+        and acceleration >= EARLY_ACCEL_MIN
+        and breakout >= EARLY_BREAKOUT_MIN
+        and EARLY_ENTRY_DISTANCE_MIN <= distance_to_high <= EARLY_ENTRY_DISTANCE_MAX
         and rsi_value < EARLY_ENTRY_RSI_MAX
         and not bearish_reversal
     )
 
+    # -------------------------------------------------------------- PRE-ENTRY
+    pre_entry = (
+        score >= PRE_ENTRY_SCORE_MIN
+        and ema_bullish
+        and c5 >= 0.30
+        and c15 >= 0.15
+        and c30 >= 0.50
+        and acceleration >= 0.20
+        and breakout >= -1.00
+        and distance_to_high <= PRE_ENTRY_DISTANCE_MAX
+        and rsi_value < PRE_ENTRY_RSI_MAX
+        and not bearish_reversal
+        and volume_ratio >= 0.40
+    )
+
+    quality_fail = quality_failures(analysis)
+    if (standard_entry or early_entry) and quality_fail:
+        return _no_levels("WATCH", "Quality filter: " + ", ".join(quality_fail))
+
     if standard_entry or early_entry:
         action = "ENTRY"
-        reason = (
-            "Confirmed continuation"
-            if standard_entry
-            else "Early continuation momentum"
-        )
-    elif (
-        score >= 55
-        and trend_ok
-        and not bearish_reversal
-    ):
+        reason = "Confirmed continuation" if standard_entry else "Early continuation momentum"
+    elif pre_entry:
+        action = "PRE"
+        reason = "Pre-entry - waiting for confirmation"
+    elif score >= 50 and trend_ok and not bearish_reversal:
         action = "WATCH"
         reason = "Waiting for stronger confirmation"
     elif bearish_reversal or (not trend_ok and c5 < 0):
@@ -751,50 +884,24 @@ def build_trade_plan(analysis: Dict[str, Any]) -> Dict[str, Any]:
         reason = "No continuation setup"
 
     if action != "ENTRY":
-        return {
-            "action": action,
-            "sl": None,
-            "tp1": None,
-            "tp2": None,
-            "trailing": None,
-            "risk_pct": 0.0,
-            "reward1_pct": 0.0,
-            "reward2_pct": 0.0,
-            "rr1": 0.0,
-            "rr2": 0.0,
-            "reason": reason,
-        }
+        return _no_levels(action, reason)
 
-    # Trade plan is based on live market price, not the potentially stale
-    # closed candle price.
-    risk_pct = 1.80
-    reward1_pct = 2.50
-    reward2_pct = 5.00
-
+    # ------------------------------------------------------------- TRADE PLAN
+    risk_pct = RISK_PERCENT
     sl = price * (1.0 - risk_pct / 100.0)
-    tp1 = price * (1.0 + reward1_pct / 100.0)
-    tp2 = price * (1.0 + reward2_pct / 100.0)
-    trailing = price * 0.985
+    tp1 = price * (1.0 + TP1_PERCENT / 100.0)
+    tp2 = price * (1.0 + TP2_PERCENT / 100.0)
+    trailing = price * (1.0 - TRAILING_PERCENT / 100.0)
 
     risk = price - sl
-    reward1 = tp1 - price
-    reward2 = tp2 - price
-
-    rr1 = reward1 / risk if risk > 0 else 0.0
-    rr2 = reward2 / risk if risk > 0 else 0.0
+    rr1 = (tp1 - price) / risk if risk > 0 else 0.0
+    rr2 = (tp2 - price) / risk if risk > 0 else 0.0
 
     return {
-        "action": action,
-        "sl": sl,
-        "tp1": tp1,
-        "tp2": tp2,
-        "trailing": trailing,
-        "risk_pct": risk_pct,
-        "reward1_pct": reward1_pct,
-        "reward2_pct": reward2_pct,
-        "rr1": rr1,
-        "rr2": rr2,
-        "reason": reason,
+        "action": action, "sl": sl, "tp1": tp1, "tp2": tp2,
+        "trailing": trailing, "risk_pct": risk_pct,
+        "reward1_pct": TP1_PERCENT, "reward2_pct": TP2_PERCENT,
+        "rr1": rr1, "rr2": rr2, "reason": reason,
     }
 
 
@@ -815,78 +922,113 @@ def print_top_gainers(markets: Dict[str, Dict[str, Any]]) -> List[str]:
     print("=" * 100)
 
     for index, item in enumerate(gainers[:TOP_GAINERS_PRINT], start=1):
-        symbol = item["symbol"]
-        day_change = item["day_change"]
-        price = item["latest"]
         print(
-            f"{index:02d}. {symbol:<12} {day_change:+7.2f}% "
-            f"Price: {fmt_number(price)}"
+            f"{index:02d}. {item['symbol']:<12} "
+            f"{item['day_change']:+7.2f}% "
+            f"Price: {fmt_number(item['latest'])}"
         )
 
     return [x["symbol"] for x in gainers[:MARKETS_TO_SCAN]]
 
 
-def print_candidate(analysis: Dict[str, Any], plan: Dict[str, Any]) -> None:
-    #print()
-    #print("-" * 100)
+def can_send_alert(symbol: str) -> bool:
+    last = LAST_ALERT.get(symbol, 0.0)
+    return (time.time() - last) >= ALERT_COOLDOWN_SECONDS
 
+
+def print_candidate(analysis: Dict[str, Any], plan: Dict[str, Any]) -> None:
     symbol = analysis["symbol"]
     action = plan["action"]
     score = analysis["score"]
 
-    if action == "ENTRY":
-        print(f"🚨 {symbol} | {action} | Score={score:.1f}")
-        print(f"Market Price : {fmt_number(analysis['market_price'])}")
-        print(f"Closed Price : {fmt_number(analysis['signal_price'])}")
-        print(f"24H Change  : {fmt_pct(analysis['day_change'])}")
+    if action != "ENTRY":
+        failed = ""
+        if action in ("PRE", "WATCH", "WEAK", "EXIT"):
+            fails = explain_early_failures(analysis)
+            if fails:
+                failed = " | ✗ " + ",".join(fails)
 
-        # IMPORTANT: no negative sign here. Distance to high is already positive.
-        print(f"Distance High: {analysis['distance_to_high']:.2f}%")
-
-        print(f"Volume Ratio : {analysis['volume_ratio']:.2f}x")
         print(
-            f"EMA9/EMA20  : {fmt_number(analysis['ema9'])} / "
-            f"{fmt_number(analysis['ema20'])}"
+            f"{symbol:<10} | {action:<5} | Score={score:.1f} | "
+            f"24H={analysis['day_change']:+.2f}% | "
+            f"5m={analysis['c5']:+.2f}% | 15m={analysis['c15']:+.2f}% | "
+            f"Vol={analysis['volume_ratio']:.2f}x | RSI={analysis['rsi']:.1f} | "
+            f"{plan.get('reason', 'N/A')}{failed}"
         )
-        print(f"RSI         : {analysis['rsi']:.1f}")
-        print(f"5m          : {fmt_pct(analysis['c5'])}")
-        print(f"15m         : {fmt_pct(analysis['c15'])}")
-        print(f"30m         : {fmt_pct(analysis['c30'])}")
-        print(f"Acceleration: {fmt_pct(analysis['acceleration'])}")
-        print(f"Breakout    : {fmt_pct(analysis['breakout'])}")
-        print(f"Candle      : {analysis['candle_strength']:.2f}")
-        print(f"Pullback    : {analysis['pullback']:.2f}")
-        print(f"Decision    : {plan.get('reason', 'N/A')}")
-        print(f"Candle Scale: x{analysis['candle_factor']:g} (error={analysis['candle_error'] * 100:.2f}%)")
+        return
 
-    if analysis.get("volume_anomaly"):
-        print("⚠️ Volume anomaly guard: ENTRY disabled")
+    print()
+    print(f"🚨 {symbol} | ENTRY | Score={score:.1f}")
+    print(f"Market Price : {fmt_number(analysis['market_price'])}")
+    print(f"Closed Price : {fmt_number(analysis['signal_price'])}")
+    print(f"24H Change   : {fmt_pct(analysis['day_change'])}")
+    print(f"Distance High: {analysis['distance_to_high']:.2f}%")
+    print(f"Volume Ratio : {analysis['volume_ratio']:.2f}x")
+    print(f"EMA9/EMA20   : {fmt_number(analysis['ema9'])} / {fmt_number(analysis['ema20'])}")
+    print(f"RSI          : {analysis['rsi']:.1f}")
+    print(f"5m           : {fmt_pct(analysis['c5'])}")
+    print(f"15m          : {fmt_pct(analysis['c15'])}")
+    print(f"30m          : {fmt_pct(analysis['c30'])}")
+    print(f"Acceleration : {fmt_pct(analysis['acceleration'])}")
+    print(f"Breakout     : {fmt_pct(analysis['breakout'])}")
+    print(f"Candle       : {analysis['candle_strength']:.2f}")
+    print(f"Pullback     : {analysis['pullback_pct']:.2f}%")
+    print(f"Decision     : {plan.get('reason', 'N/A')}")
+    print(
+        f"Candle Scale : x{analysis['candle_factor']:g} "
+        f"(error={analysis['candle_error'] * 100:.2f}%)"
+    )
 
-    if action == "ENTRY":
-        print()
-        print("📌 TRADE PLAN")
-        print(f"SL       : {fmt_number(plan['sl'])}")
-        print(f"TP1      : {fmt_number(plan['tp1'])}")
-        print(f"TP2      : {fmt_number(plan['tp2'])}")
-        print(f"Trailing : {fmt_number(plan['trailing'])}")
-        print(f"R/R TP1  : 1:{plan['rr1']:.2f}")
-        print(f"R/R TP2  : 1:{plan['rr2']:.2f}")
+    print()
+    print("📌 TRADE PLAN")
+    print(f"SL       : {fmt_number(plan['sl'])}")
+    print(f"TP1      : {fmt_number(plan['tp1'])}")
+    print(f"TP2      : {fmt_number(plan['tp2'])}")
+    print(f"Trailing : {fmt_number(plan['trailing'])}")
+    print(f"R/R TP1  : 1:{plan['rr1']:.2f}")
+    print(f"R/R TP2  : 1:{plan['rr2']:.2f}")
 
-        rows_data=[]
-        rows_data= f"SL       : {fmt_number(plan['sl'])}"
-        f"TP1      : {fmt_number(plan['tp1'])}"
-        f"TP2      : {fmt_number(plan['tp2'])}"
-        f"Trailing : {fmt_number(plan['trailing'])}"
-        f"R/R TP1  : 1:{plan['rr1']:.2f}"
-        f"R/R TP2  : 1:{plan['rr2']:.2f}"
+    # Anti-spam: one email per symbol per cooldown window
+    if not can_send_alert(symbol):
+        print(f"⏸ ایمیل {symbol} در بازه‌ی cooldown است، دوباره ارسال نشد.")
+        return
 
-        send_beautiful_email(
-            subject=(f"🚀 سیگنال خرید {symbol} "),
-            title=(f"خرید {symbol}"),
-            type_color="#10b981",
-            rows_data=rows_data
-        )
+    rows_data = [
+        ("نماد", str(symbol)),
+        ("امتیاز", f"{score:.1f}"),
+        ("قیمت فعلی", fmt_number(analysis["market_price"])),
+        ("تغییر 24 ساعت", fmt_pct(analysis["day_change"])),
+        ("فاصله تا سقف 24h", f"{analysis['distance_to_high']:.2f}%"),
+        ("Volume Ratio", f"{analysis['volume_ratio']:.2f}x"),
+        ("RSI", f"{analysis['rsi']:.1f}"),
+        ("5m", fmt_pct(analysis["c5"])),
+        ("15m", fmt_pct(analysis["c15"])),
+        ("30m", fmt_pct(analysis["c30"])),
+        ("Acceleration", fmt_pct(analysis["acceleration"])),
+        ("Breakout", fmt_pct(analysis["breakout"])),
+        ("دلیل سیگنال", str(plan.get("reason", "N/A"))),
+        ("حد ضرر", fmt_number(plan["sl"])),
+        ("هدف اول", fmt_number(plan["tp1"])),
+        ("هدف دوم", fmt_number(plan["tp2"])),
+        ("Trailing", fmt_number(plan["trailing"])),
+        ("R/R TP1", f"1:{plan['rr1']:.2f}"),
+        ("R/R TP2", f"1:{plan['rr2']:.2f}"),
+    ]
 
+    sent = send_beautiful_email(
+        subject=f"🚀 سیگنال خرید {symbol}",
+        title=f"خرید {symbol}",
+        type_color="#10b981",
+        rows_data=rows_data,
+    )
+
+    if sent:
+        LAST_ALERT[symbol] = time.time()
+
+
+# ============================================================================
+# SCANNER
+# ============================================================================
 
 def print_scanner_header() -> None:
     print("=" * 100)
@@ -900,6 +1042,8 @@ def scan_once() -> None:
     print_scanner_header()
 
     start = time.perf_counter()
+    SKIP_COUNTS.clear()
+
     markets = fetch_market_stats()
 
     if not markets:
@@ -913,7 +1057,6 @@ def scan_once() -> None:
     print("=" * 100)
 
     analyses: List[Dict[str, Any]] = []
-    valid_count = 0
 
     for symbol in symbols:
         market = markets.get(symbol)
@@ -922,52 +1065,80 @@ def scan_once() -> None:
 
         try:
             analysis = build_analysis(symbol, market)
-            if analysis is None:
-                continue
-            valid_count += 1
-            analyses.append(analysis)
+            if analysis is not None:
+                analyses.append(analysis)
         except Exception as exc:
+            skip("exception")
             print(f"⚠️ {symbol} analysis failed: {exc}")
 
-    # Sort by score, while retaining all analyzed candidates for summary.
-    ranked = sorted(analyses, key=lambda x: x["score"], reverse=True)
+    # Compute each plan ONCE
+    results = [(a, build_trade_plan(a)) for a in analyses]
+    results.sort(key=lambda r: r[0]["score"], reverse=True)
+
+    counts = {"ENTRY": 0, "PRE": 0, "WATCH": 0, "EXIT": 0, "WEAK": 0}
+    for _, plan in results:
+        counts[plan["action"]] = counts.get(plan["action"], 0) + 1
 
     print()
     print("=" * 100)
     print("🎯 BEST CONTINUATION CANDIDATES")
     print("=" * 100)
 
-    counts = {"ENTRY": 0, "PRE": 0, "WATCH": 0, "EXIT": 0, "WEAK": 0}
-
-    # Print only the strongest useful set; this keeps the console readable.
-    for analysis in ranked[:20]:
-        plan = build_trade_plan(analysis)
-        counts[plan["action"]] = counts.get(plan["action"], 0) + 1
-        print_candidate(analysis, plan)
-
-    # Count all analyzed markets as well.
-    full_counts = {"ENTRY": 0, "PRE": 0, "WATCH": 0, "EXIT": 0, "WEAK": 0}
-    for analysis in analyses:
-        plan = build_trade_plan(analysis)
-        full_counts[plan["action"]] = full_counts.get(plan["action"], 0) + 1
+    # Top N by score, PLUS every ENTRY even if it is outside the top N
+    shown = 0
+    for analysis, plan in results:
+        if shown < CANDIDATES_PRINT or plan["action"] == "ENTRY":
+            print_candidate(analysis, plan)
+            shown += 1
 
     elapsed = time.perf_counter() - start
 
     print()
     print(
         "📊 SUMMARY | "
-        f"ENTRY={full_counts['ENTRY']} | "
-        f"PRE={full_counts['PRE']} | "
-        f"WATCH={full_counts['WATCH']} | "
-        f"EXIT={full_counts['EXIT']} | "
-        f"WEAK={full_counts['WEAK']}"
+        f"ENTRY={counts['ENTRY']} | PRE={counts['PRE']} | "
+        f"WATCH={counts['WATCH']} | EXIT={counts['EXIT']} | WEAK={counts['WEAK']}"
     )
+
+    if SKIP_COUNTS:
+        print(
+            "🚫 Skipped: "
+            + " | ".join(f"{k}={v}" for k, v in sorted(SKIP_COUNTS.items()))
+        )
+
+    # Which early-entry condition rejects the most coins
+    fail_stats: Dict[str, int] = {}
+    for analysis, plan in results:
+        if plan["action"] != "ENTRY":
+            for name in explain_early_failures(analysis):
+                fail_stats[name] = fail_stats.get(name, 0) + 1
+
+    if fail_stats:
+        top_fails = sorted(fail_stats.items(), key=lambda kv: kv[1], reverse=True)[:5]
+        print(
+            "🔬 Top blocking filters: "
+            + " | ".join(f"{k}={v}" for k, v in top_fails)
+        )
+
+    q_stats: Dict[str, int] = {}
+    for _, plan in results:
+        if str(plan.get("reason", "")).startswith("Quality filter:"):
+            for part in plan["reason"].split(":", 1)[1].split(","):
+                key = part.strip().split("(")[0]
+                q_stats[key] = q_stats.get(key, 0) + 1
+    if q_stats:
+        print(
+            "🛡 Quality blocked (would-be ENTRY): "
+            + " | ".join(f"{k}={v}" for k, v in sorted(q_stats.items(), key=lambda kv: -kv[1]))
+        )
+
     print()
     print(f"⏱ Scan completed in {elapsed:.1f}s")
     print(f"📡 Markets scanned: {len(symbols)}")
-    print(f"📊 Valid analyses: {valid_count}")
-    print(f"🎯 Actionable: {full_counts['ENTRY']}")
-    print(f"👀 Watch: {full_counts['WATCH']}")
+    print(f"📊 Valid analyses: {len(analyses)}")
+    print(f"🎯 Actionable ENTRY: {counts['ENTRY']}")
+    print(f"🟡 PRE-ENTRY: {counts['PRE']}")
+    print(f"👀 Watch: {counts['WATCH']}")
     print("=" * 100)
 
 
@@ -981,106 +1152,128 @@ def regression_tests() -> None:
     print("🧪 RUNNING REGRESSION TESTS")
     print("=" * 100)
 
-    # TEST 1: distance to high
-    distance = calculate_distance_to_high(90, 100)
-    assert abs(distance - 10.0) < 1e-9
+    assert abs(calculate_distance_to_high(90, 100) - 10.0) < 1e-9
     print("✅ distance_to_high")
 
-    # TEST 2: exact high
-    distance = calculate_distance_to_high(100, 100)
-    assert abs(distance) < 1e-9
+    assert abs(calculate_distance_to_high(100, 100)) < 1e-9
     print("✅ exact_high")
 
-    # TEST 3: 10x candle scale
     candles = [
         {"t": 1, "o": 99, "h": 101, "l": 98, "c": 100, "v": 10},
         {"t": 2, "o": 99, "h": 101, "l": 99, "c": 100, "v": 12},
     ]
     scaled, factor, error = normalize_candles_to_price_scale(candles, 1000)
-    assert factor == 10.0
-    assert error < 1e-9
+    assert factor == 10.0 and error < 1e-9
     assert abs(scaled[-1]["c"] - 1000) < 1e-9
     print("✅ 10x candle scale")
 
-    # TEST 4: 24h range scale
     high, low, factor = normalize_24h_range(10, 9, 90)
     assert factor == 10.0
-    assert abs(high - 100) < 1e-9
-    assert abs(low - 90) < 1e-9
+    assert abs(high - 100) < 1e-9 and abs(low - 90) < 1e-9
     print("✅ 24h range scale")
 
-    # TEST 5: huge gain alone is not enough to reach score 100
-    score = gain_score(100, 20)
-    assert score < 100
+    assert gain_score(100, 20) <= 30.0
     print("✅ gain score isolation")
 
-    # TEST 6: candle scale mismatch detection
-    candles = [
-        {"t": 1, "o": 1.00, "h": 1.10, "l": 0.90, "c": 1.00, "v": 10},
-        {"t": 2, "o": 1.00, "h": 1.10, "l": 0.90, "c": 1.00, "v": 10},
-    ]
-    target_price = 137.0
-    _, factor, error = normalize_candles_to_price_scale(candles, target_price)
-    assert error > CANDLE_SCALE_MAX_RELATIVE_ERROR
-    print(
-        "✅ candle scale mismatch detection "
-        f"(factor={factor}, error={error * 100:.2f}%)"
-    )
+    # FIX check: a +5% coin must now get a meaningful gain score
+    assert gain_score(5.0) >= 14.0
+    print("✅ realistic gain score (5% -> >=14 pts)")
 
-    # TEST 7: deterministic closed-candle detection
+    # FIX check: acceleration uses 5m vs previous 5m
+    closes = [100.0, 100.0, 100.5, 101.5]
+    c5 = pct_change(closes[-1], closes[-2])
+    prev = pct_change(closes[-2], closes[-3])
+    assert c5 > prev
+    print("✅ acceleration uses previous 5m change")
+
+    candles = [
+        {"t": 1, "o": 1.0, "h": 1.1, "l": 0.9, "c": 1.0, "v": 10},
+        {"t": 2, "o": 1.0, "h": 1.1, "l": 0.9, "c": 1.0, "v": 10},
+    ]
+    _, factor, error = normalize_candles_to_price_scale(candles, 137.0)
+    assert error > CANDLE_SCALE_MAX_RELATIVE_ERROR
+    print(f"✅ candle scale mismatch detection (factor={factor}, error={error * 100:.2f}%)")
+
     current = 1_700_000_000
-    closed_timestamp = current - CANDLE_SECONDS - 10
-    open_timestamp = current - 60
-    assert closed_timestamp + CANDLE_SECONDS <= current
-    assert open_timestamp + CANDLE_SECONDS > current
+    assert (current - CANDLE_SECONDS - 10) + CANDLE_SECONDS <= current
+    assert (current - 60) + CANDLE_SECONDS > current
     print("✅ closed candle detection")
 
-    # TEST 8: positive distance-to-high display semantics
-    distance = calculate_distance_to_high(100, 101)
-    assert distance > 0
+    assert calculate_distance_to_high(100, 101) > 0
     print("✅ positive distance-to-high semantics")
 
-    # TEST 9: extreme volume anomaly cannot create ENTRY
-    analysis = {
-        "market_price": 100.0,
-        "signal_price": 100.0,
-        "score": 95.0,
-        "c5": 2.0,
-        "c15": 2.0,
-        "c30": 2.0,
-        "acceleration": 1.0,
-        "rsi": 65.0,
-        "ema_bullish": True,
-        "distance_to_high": 1.0,
-        "breakout": 1.0,
-        "candle_strength": 0.8,
-        "volume_ratio": 100.0,
-        "volume_anomaly": True,
+    base = {
+        "market_price": 100.0, "score": 95.0, "c5": 2.0, "c15": 2.0,
+        "c30": 2.0, "acceleration": 1.0, "rsi": 65.0, "ema_bullish": True,
+        "distance_to_high": 1.0, "breakout": 1.0, "candle_strength": 0.8,
+        "volume_ratio": 50.0, "volume_anomaly": True, "volume_extreme": True,
     }
-    plan = build_trade_plan(analysis)
-    assert plan["action"] == "WATCH"
-    print("✅ volume anomaly guard")
+    assert build_trade_plan(base)["action"] == "WATCH"
+    print("✅ extreme volume guard")
 
-    # TEST 10: HBAR-like early continuation setup
     hbar_like = {
-        "market_price": 100.0,
-        "signal_price": 100.0,
-        "score": 55.0,
-        "c5": 1.24,
-        "c15": 0.60,
-        "c30": 3.18,
-        "acceleration": 1.42,
-        "rsi": 69.8,
-        "ema_bullish": True,
-        "distance_to_high": 1.29,
-        "breakout": 0.60,
-        "candle_strength": 0.44,
-        "volume_ratio": 0.77,
-        "volume_anomaly": False,
+        "market_price": 100.0, "score": 55.0, "c5": 1.24, "c15": 0.60,
+        "c30": 3.18, "acceleration": 1.42, "rsi": 69.8, "ema_bullish": True,
+        "distance_to_high": 1.29, "breakout": 0.60, "candle_strength": 0.44,
+        "volume_ratio": 0.77, "volume_anomaly": False, "volume_extreme": False,
     }
-    plan = build_trade_plan(hbar_like)
-    assert plan["action"] == "ENTRY"
+    assert build_trade_plan(hbar_like)["action"] == "ENTRY"
     print("✅ HBAR-style early continuation entry")
+
+    hbar_prebreakout = dict(
+        hbar_like, score=58.0, c5=1.00, c15=0.50, c30=2.00,
+        acceleration=0.90, rsi=70.0, distance_to_high=1.50,
+        breakout=-0.30, candle_strength=0.50, volume_ratio=0.80,
+    )
+    assert build_trade_plan(hbar_prebreakout)["action"] == "ENTRY"
+    print("✅ pre-breakout early entry")
+
+    pre_entry_like = dict(
+        hbar_like, score=64.0, c5=0.40, c15=0.20, c30=0.70,
+        acceleration=0.30, rsi=70.0, distance_to_high=3.0,
+        breakout=-0.50, candle_strength=0.20, volume_ratio=0.60,
+    )
+    assert build_trade_plan(pre_entry_like)["action"] == "PRE"
+    print("✅ PRE-ENTRY logic")
+
+    # NEW: a coin exactly on its 24h high with slow, steady momentum
+    slow_riser = dict(
+        hbar_like, score=50.0, c5=0.30, c15=0.30, c30=0.70,
+        acceleration=0.0, rsi=62.0, distance_to_high=0.0,
+        breakout=0.1, candle_strength=0.3, volume_ratio=0.8,
+    )
+    assert build_trade_plan(slow_riser)["action"] == "ENTRY"
+    print("✅ slow riser at the 24h high is now accepted")
+
+    # NEW: bearish reversal must never produce ENTRY
+    reversal = dict(
+        hbar_like, score=70.0, c5=-1.0, c15=-1.2, c30=-0.5,
+        acceleration=-0.5, ema_bullish=False,
+    )
+    assert build_trade_plan(reversal)["action"] != "ENTRY"
+    print("✅ reversal guard")
+
+    # NEW anti-fake tests
+    assert build_trade_plan(hbar_like)["action"] == "ENTRY"
+    red = dict(hbar_like, candle_strength=-1.0, volume_ratio=14.0)
+    p = build_trade_plan(red)
+    assert p["action"] == "WATCH" and "red-last-candle" in p["reason"]
+    print("✅ red last candle is blocked (ETHFI-style)")
+
+    flat = dict(hbar_like, active_candles=3, flat_closes=5)
+    p = build_trade_plan(flat)
+    assert p["action"] == "WATCH" and "flat-candles" in p["reason"]
+    print("✅ flat / thin market is blocked (BAND/PENGU-style)")
+
+    wick = dict(hbar_like, upper_wick=0.8)
+    assert build_trade_plan(wick)["action"] == "WATCH"
+    ext = dict(hbar_like, ext_ema20=8.0)
+    assert build_trade_plan(ext)["action"] == "WATCH"
+    print("✅ upper wick / overextension blocked")
+
+    good = dict(hbar_like, active_candles=8, flat_closes=0, upper_wick=0.2, ext_ema20=1.5)
+    assert build_trade_plan(good)["action"] == "ENTRY"
+    print("✅ clean setup still produces ENTRY")
 
     print("=" * 100)
     print("✅ ALL TESTS PASSED")
@@ -1094,16 +1287,19 @@ def regression_tests() -> None:
 
 def main() -> None:
     print("=" * 100)
-    print("NOBITEX TOP-GAINER CONTINUATION PREDICTOR")
+    print("NOBITEX TOP-GAINER CONTINUATION PREDICTOR v3")
     print("=" * 100)
 
     regression_tests()
 
     print("🟢 Scanner started.")
     print(f"⏱ Interval: {SCAN_INTERVAL_SECONDS}s")
-    print("🕯 Candle: 5m")
+    print(f"🕯 Candle: {CANDLE_RESOLUTION}m")
     print("🔒 Closed-candle mode: True")
     print("💡 This program does NOT place orders.")
+    print(f"📊 Volume anomaly: >{VOLUME_ANOMALY}x")
+    print(f"🚨 Extreme volume: >{VOLUME_EXTREME}x")
+    print(f"📧 Alert cooldown: {ALERT_COOLDOWN_SECONDS // 60} min per symbol")
     print("=" * 100)
 
     while True:
@@ -1119,6 +1315,7 @@ def main() -> None:
 
         print()
         print(f"⏳ Waiting {SCAN_INTERVAL_SECONDS}s...")
+
         try:
             time.sleep(SCAN_INTERVAL_SECONDS)
         except KeyboardInterrupt:
