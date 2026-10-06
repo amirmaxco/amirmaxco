@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import jdatetime
 import requests
 
+from botemailtrading import CC_EMAIL
 
 # ============================================================================
 # NOBITEX TOP-GAINER CONTINUATION PREDICTOR  (v3 - relaxed + anti-fake quality filters)
@@ -123,7 +124,7 @@ SESSION.headers.update({
 SENDER_EMAIL = "amirghoorbaninia3002@gmail.com"
 SENDER_PASSWORD = "qcmg jxrc vxic mucu"
 RECEIVER_EMAIL = "amirghoorbaninia3002@gmail.com"
-CC_EMAIL = "www.rasul.mahmoudimajd1038@gmail.com"
+#CC_EMAIL = "www.rasul.mahmoudimajd1038@gmail.com"
 
 NOBITEX_TOKEN = "o5TJUZrJoLj7afjp3jxhYa2wixNdKI4gdX8KVtj9Htk="
 NOBITEX_TOKEN_PUBLIC = "4f607aff93a0f574deeda11c0a88c8d89ecc56af"
